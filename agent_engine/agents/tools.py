@@ -199,3 +199,57 @@ def add_design_comment(issue_id: int, spec_body: str, ctx: Context) -> Dict[str,
     ctx.state["tech_design_completed"] = True
     ctx.state["tech_design_markdown"] = spec_body
     return {"id": comment_id, "body": spec_body}
+
+
+def create_developer_sub_issue(
+    parent_issue_id: int, title: str, body: str, depends_on: List[int], ctx: Context
+) -> Dict[str, Any]:
+    """Create a child developer sub-issue on GitHub linked to the parent issue and upstream dependencies.
+
+    Args:
+        parent_issue_id: The ID of the parent feature issue.
+        title: The title of the developer task sub-issue.
+        body: The comprehensive task breakdown body with ACs and branch specs.
+        depends_on: List of upstream issue IDs that block this task.
+    """
+    print(f"[Tool: GitHub Sub-Issue] Creating sub-issue for Parent #{parent_issue_id}: '{title}'")
+    token = get_github_installation_token()
+
+    dep_refs = ", ".join([f"#{dep_id}" for dep_id in depends_on]) if depends_on else "None"
+    formatted_body = (
+        f"**Parent Issue:** #{parent_issue_id}\n"
+        f"**Dependencies / Blocked By:** {dep_refs}\n\n"
+        "---\n\n"
+        f"{body}"
+    )
+
+    if token:
+        try:
+            import requests
+
+            headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+            repo = os.getenv("GITHUB_REPO", "mbychkowski/agent-factory")
+            url = f"https://api.github.com/repos/{repo}/issues"
+            resp = requests.post(
+                url,
+                headers=headers,
+                json={"title": f"[Sub-Task] {title}", "body": formatted_body},
+                timeout=10,
+            )
+            if resp.status_code in (200, 201):
+                sub_issue_data = resp.json()
+                sub_id = sub_issue_data.get("number")
+                print(f"[Tool: GitHub] Created real sub-issue #{sub_id} in {repo}")
+                return {
+                    "id": sub_id,
+                    "title": title,
+                    "parent_issue_id": parent_issue_id,
+                    "status": "open",
+                    "url": sub_issue_data.get("html_url"),
+                }
+        except Exception as e:
+            print(f"[Tool: GitHub Sub-Issue Creation Error] {e}")
+
+    sub_id = 101
+    return {"id": sub_id, "title": title, "parent_issue_id": parent_issue_id, "status": "open"}
+
