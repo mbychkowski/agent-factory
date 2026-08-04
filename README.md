@@ -159,9 +159,11 @@ Under **Repository Permissions**:
 * **Metadata:** **Read-only** *(automatically selected)*
 
 ### 3. Subscribe to Webhook Events
-Under **Subscribe to events**:
+Under **Subscribe to events**, check:
 * ✅ **Issues**
 * ✅ **Issue comment**
+* ✅ **Discussion**
+* ✅ **Discussion comment**
 
 ### 4. Generate Private Key & Install
 1. Click **Create GitHub App**.
@@ -234,7 +236,7 @@ cd ..
 
 ---
 
-### Step 3: Create Cloud Pub/Sub Topic & Push Subscription
+### Step 3: Create Cloud Pub/Sub Topic, IAM Permissions & Push Subscription
 
 1. **Create the messaging topic used by the Gateway to queue human interaction events:**
    ```bash
@@ -242,12 +244,20 @@ cd ..
      --project="${GOOGLE_CLOUD_PROJECT}"
    ```
 
-2. **Create a Pub/Sub Push Subscription to forward events to the Agent Engine:**
+2. **Grant Pub/Sub Publisher permission to the Gateway Cloud Run service account:**
    ```bash
-   # Retrieve your Agent Engine API base URL (or Cloud Run service URL)
-   AGENT_ENDPOINT="https://${DEFAULT_GOOGLE_CLOUD_LOCATION:-us-east1}-aiplatform.googleapis.com/reasoningEngines/v1/${AGENT_RUNTIME_ID}/api/pubsub/push"
+   PROJECT_NUMBER=$(gcloud projects describe "${GOOGLE_CLOUD_PROJECT}" --format="value(projectNumber)")
 
-   # Create push subscription targeting the agent's /pubsub/push endpoint
+   gcloud projects add-iam-policy-binding "${GOOGLE_CLOUD_PROJECT}" \
+     --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+     --role="roles/pubsub.publisher"
+   ```
+
+3. **Create a Pub/Sub Push Subscription to forward events to the Agent Engine:**
+   ```bash
+   # Retrieve your Agent Engine API base URL and create push subscription targeting /pubsub/push
+   AGENT_ENDPOINT="https://${DEFAULT_GOOGLE_CLOUD_LOCATION:-us-east1}-aiplatform.googleapis.com/v1/${AGENT_RUNTIME_ID}/api/pubsub/push"
+
    gcloud pubsub subscriptions create github-human-events-sub \
      --topic=github-human-events \
      --push-endpoint="${AGENT_ENDPOINT}" \
