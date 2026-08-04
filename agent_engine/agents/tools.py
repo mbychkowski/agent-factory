@@ -87,12 +87,23 @@ def create_github_issue(title: str, body: str, ctx: Context) -> Dict[str, Any]:
             headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
             repo = os.getenv("GITHUB_REPO", "mbychkowski/agent-factory")
             url = f"https://api.github.com/repos/{repo}/issues"
-            resp = requests.post(url, headers=headers, json={"title": title, "body": body}, timeout=10)
+            resp = requests.post(
+                url,
+                headers=headers,
+                json={
+                    "title": title,
+                    "body": body,
+                    "labels": ["agent:in-progress", "phase:user-story"],
+                },
+                timeout=10,
+            )
             if resp.status_code in (200, 201):
                 issue_data = resp.json()
                 issue_id = issue_data.get("number")
                 ctx.state["parent_issue_id"] = issue_id
                 ctx.state["user_story_markdown"] = body
+                ctx.state["current_status_label"] = "agent:in-progress"
+                ctx.state["current_phase_label"] = "phase:user-story"
                 print(f"[Tool: GitHub] Created real GitHub issue #{issue_id} in {repo}")
                 return {"id": issue_id, "title": title, "status": "open", "url": issue_data.get("html_url")}
         except Exception as e:
@@ -139,6 +150,65 @@ def update_github_issue(issue_id: int, body: str, title: str = None, ctx: Contex
             print(f"[Tool: GitHub Update Error] {e}")
 
     return {"id": issue_id, "status": "simulated_update"}
+
+
+def sync_github_issue_labels(
+    issue_id: int, status_label: str, phase_label: str, ctx: Context = None
+) -> Dict[str, Any]:
+    """Replaces agent status and phase labels on a GitHub issue to reflect active workflow state.
+
+    Args:
+        issue_id: The ID of the GitHub issue to update.
+        status_label: Active status label (e.g., 'agent:in-progress', 'agent:awaiting-human-lgtm', 'agent:completed').
+        phase_label: Active phase label (e.g., 'phase:user-story', 'phase:technical-design', 'phase:task-planning').
+        ctx: Workflow Context instance.
+    """
+    print(f"[Tool: GitHub Labels] Syncing labels for Issue #{issue_id}: status='{status_label}', phase='{phase_label}'")
+    token = get_github_installation_token()
+
+    managed_status_labels = {"agent:in-progress", "agent:awaiting-human-lgtm", "agent:completed"}
+    managed_phase_labels = {"phase:user-story", "phase:technical-design", "phase:task-planning"}
+
+    if token and issue_id:
+        try:
+            import requests
+
+            headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+            repo = os.getenv("GITHUB_REPO", "mbychkowski/agent-factory")
+            url = f"https://api.github.com/repos/{repo}/issues/{issue_id}/labels"
+
+            resp = requests.get(url, headers=headers, timeout=10)
+            current_labels = []
+            if resp.status_code == 200:
+                current_labels = [l["name"] if isinstance(l, dict) else str(l) for l in resp.json()]
+
+            preserved_labels = [
+                lbl for lbl in current_labels
+                if lbl not in managed_status_labels and lbl not in managed_phase_labels
+            ]
+
+            updated_labels = list(preserved_labels)
+            if status_label:
+                updated_labels.append(status_label)
+            if phase_label:
+                updated_labels.append(phase_label)
+
+            put_resp = requests.put(url, headers=headers, json={"labels": updated_labels}, timeout=10)
+            if put_resp.status_code in (200, 201):
+                print(f"[Tool: GitHub Labels] Successfully updated Issue #{issue_id} labels: {updated_labels}")
+                if ctx and hasattr(ctx, "state"):
+                    ctx.state["current_status_label"] = status_label
+                    ctx.state["current_phase_label"] = phase_label
+                return {"id": issue_id, "status": "updated", "labels": updated_labels}
+            else:
+                print(f"[Tool: GitHub Labels Warning] ({put_resp.status_code}): {put_resp.text}")
+        except Exception as e:
+            print(f"[Tool: GitHub Labels Error] {e}")
+
+    if ctx and hasattr(ctx, "state"):
+        ctx.state["current_status_label"] = status_label
+        ctx.state["current_phase_label"] = phase_label
+    return {"id": issue_id, "status": "simulated_update", "status_label": status_label, "phase_label": phase_label}
 
 
 

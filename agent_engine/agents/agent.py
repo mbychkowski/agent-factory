@@ -23,7 +23,20 @@ async def facilitator_gate(node_input: Any, ctx: Context) -> Event:
     Filters noise, answers meta-questions, asks clarifying questions on conflicts,
     and passes clean synthesized deltas to downstream spec agents.
     """
-    is_initial_start = not ctx.state.get("parent_issue_id") and not ctx.state.get("user_story_markdown")
+    parent_id = ctx.state.get("parent_issue_id")
+    if parent_id:
+        try:
+            from agent_engine.agents.tools import sync_github_issue_labels
+            current_phase = "phase:user-story"
+            if ctx.state.get("tech_design_completed"):
+                current_phase = "phase:task-planning"
+            elif ctx.state.get("human_story_approved"):
+                current_phase = "phase:technical-design"
+            sync_github_issue_labels(int(parent_id), "agent:in-progress", current_phase, ctx=ctx)
+        except Exception as e:
+            print(f"[Facilitator Gate Label Sync Warning] {e}")
+
+    is_initial_start = not parent_id and not ctx.state.get("user_story_markdown")
 
     if is_initial_start:
         print("Facilitator Gate: Initial spec creation detected. Proceeding to User Story Refiner...")
@@ -176,6 +189,12 @@ async def gate_after_story_refiner(ctx: Context) -> Event:
 
     if parent_id and human_approved:
         print(f"Milestone 1 Passed: Parent Issue #{parent_id} confirmed & Human Approved. Proceeding to Technical Design.")
+        try:
+            from agent_engine.agents.tools import sync_github_issue_labels
+            sync_github_issue_labels(int(parent_id), "agent:in-progress", "phase:technical-design", ctx=ctx)
+        except Exception as e:
+            print(f"[Milestone 1 Gate Label Sync Warning] {e}")
+
         guided_input = (
             "The User Story has been peer-reviewed and signed off by the human on GitHub. "
             f"Please formulate your RFC Technical Design for Issue #{parent_id}.\n\n"
@@ -185,11 +204,16 @@ async def gate_after_story_refiner(ctx: Context) -> Event:
 
     elif parent_id:
         print(f"Milestone 1 Gate: Parent Issue #{parent_id} updated on GitHub. WAITING FOR HUMAN APPROVAL on GitHub.")
+        try:
+            from agent_engine.agents.tools import sync_github_issue_labels
+            sync_github_issue_labels(int(parent_id), "agent:awaiting-human-lgtm", "phase:user-story", ctx=ctx)
+        except Exception as e:
+            print(f"[Milestone 1 Gate Label Sync Warning] {e}")
+
         return Event(output=f"User Story Issue #{parent_id} updated with certified spec. Awaiting human approval on GitHub before drafting RFC.")
 
     print("Gate Evaluating: Parent Issue ID not found. Pausing execution.")
     return Event()
-
 
 
 async def gate_design_peer_review(node_input: Any, ctx: Context) -> Event:
@@ -250,19 +274,50 @@ async def gate_after_technical_designer(ctx: Context) -> Event:
     await asyncio.sleep(4)
 
     tech_design_id = ctx.state.get("tech_design_comment_id")
+    parent_id = ctx.state.get("parent_issue_id")
     tech_design = ctx.state.get("tech_design_markdown", "")
     human_approved = ctx.state.get("human_design_approved", False) or ctx.state.get("single_pass_mode", False)
 
     if ctx.state.get("tech_design_completed") and tech_design_id and human_approved:
         print(f"Milestone 2 Passed: RFC Comment #{tech_design_id} confirmed & Human Approved. Proceeding to Task Planner.")
+        if parent_id:
+            try:
+                from agent_engine.agents.tools import sync_github_issue_labels
+                sync_github_issue_labels(int(parent_id), "agent:in-progress", "phase:task-planning", ctx=ctx)
+            except Exception as e:
+                print(f"[Milestone 2 Gate Label Sync Warning] {e}")
+
         return Event(output=tech_design, actions=EventActions(route="task_planner"))
 
     elif tech_design_id:
         print(f"Milestone 2 Gate: RFC Design Comment #{tech_design_id} published on GitHub. WAITING FOR HUMAN APPROVAL on GitHub.")
+        if parent_id:
+            try:
+                from agent_engine.agents.tools import sync_github_issue_labels
+                sync_github_issue_labels(int(parent_id), "agent:awaiting-human-lgtm", "phase:technical-design", ctx=ctx)
+            except Exception as e:
+                print(f"[Milestone 2 Gate Label Sync Warning] {e}")
+
         return Event(output=f"RFC Design Comment #{tech_design_id} published. Awaiting human approval on GitHub before creating task sub-issues.")
 
     print("Gate 2 Evaluating: Design spec comment not found. Pausing execution.")
     return Event()
+
+
+async def gate_after_task_planner(node_input: Any, ctx: Context) -> Event:
+    """
+    Milestone 3 Gate: Marks the workflow and parent issue labels as completed after Task Planner finishes.
+    """
+    parent_id = ctx.state.get("parent_issue_id")
+    if parent_id:
+        try:
+            from agent_engine.agents.tools import sync_github_issue_labels
+            sync_github_issue_labels(int(parent_id), "agent:completed", "phase:task-planning", ctx=ctx)
+            print(f"[Milestone 3 Gate] Marked GitHub Issue #{parent_id} as agent:completed!")
+        except Exception as e:
+            print(f"[Milestone 3 Gate Label Sync Warning] {e}")
+
+    return Event(output=node_input)
 
 
 async def routing_gate(node_input: Any, ctx: Context) -> Event:
@@ -322,6 +377,7 @@ root_workflow = Workflow(
         (gate_after_technical_designer, {
             "task_planner": task_planner,
         }),
+        (task_planner, gate_after_task_planner),
         (routing_gate, {
             "user_story_refiner": user_story_refiner,
             "technical_designer": technical_designer,

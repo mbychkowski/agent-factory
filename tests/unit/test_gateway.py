@@ -2,6 +2,7 @@ import hmac
 import hashlib
 import json
 import unittest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from gateway.main import app
@@ -64,16 +65,17 @@ class TestGatewayModule(unittest.TestCase):
             "Content-Type": "application/json",
         }
 
-        response = self.client.post(
-            "/webhooks/github",
-            content=body_bytes,
-            headers=headers
-        )
+        with patch("gateway.app.routes.github.publish_event", return_value="evt_123"):
+            response = self.client.post(
+                "/webhooks/github",
+                content=body_bytes,
+                headers=headers
+            )
 
-        self.assertEqual(response.status_code, 202)
-        res_data = response.json()
-        self.assertIn("accepted", res_data["status"])
-        self.assertIsNotNone(res_data["event_id"])
+            self.assertEqual(response.status_code, 202)
+            res_data = response.json()
+            self.assertIn("accepted", res_data["status"])
+            self.assertIsNotNone(res_data["event_id"])
 
     def test_github_webhook_bot_comment_dropped(self) -> None:
         payload = {
@@ -103,6 +105,47 @@ class TestGatewayModule(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         res_data = response.json()
         self.assertEqual(res_data["status"], "ignored_bot")
+
+
+    def test_no_duplicate_comment_chunks(self) -> None:
+        """Tests that stream events containing both content and output do not duplicate text in task processing."""
+        from unittest.mock import patch, MagicMock, AsyncMock
+        
+        event_with_dups = {
+            "content": {"parts": [{"text": "Unique RFC Section"}]},
+            "output": "Unique RFC Section",
+            "author": "technical_designer"
+        }
+        stream_bytes = (json.dumps(event_with_dups) + "\n").encode("utf-8")
+
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+        mock_response.aread = AsyncMock(return_value=stream_bytes)
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=None)
+
+        task_payload = {
+            "event_id": "test_evt_123",
+            "interaction_type": "ISSUE_OPENED",
+            "content": "Test issue content",
+            "issue_id": 16,
+            "actor": {"user_id": "test_user"}
+        }
+
+        with patch("google.auth.default", return_value=(MagicMock(), "test-project")):
+            with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+                mock_post.return_value = MagicMock(status_code=200)
+                with patch("httpx.AsyncClient.stream", return_value=mock_response):
+                    with patch("gateway.app.utils.github_commenter.post_agent_github_comment") as mock_commenter:
+                        mock_commenter.return_value = True
+                        response = self.client.post("/tasks/execute-agent-turn", json=task_payload)
+                        
+                        self.assertEqual(response.status_code, 200)
+                        mock_commenter.assert_called_once()
+                        posted_text = mock_commenter.call_args[0][1]
+                        
+                        # Verify that "Unique RFC Section" appears exactly ONCE in the posted text
+                        self.assertEqual(posted_text.count("Unique RFC Section"), 1)
 
 
 if __name__ == "__main__":

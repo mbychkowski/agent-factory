@@ -131,26 +131,43 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
                     continue
                 try:
                     event_data = json.loads(line)
-                    if isinstance(event_data, dict):
-                        content_dict = event_data.get("content", {})
-                        if isinstance(content_dict, dict):
-                            parts = content_dict.get("parts", [])
+                    if not isinstance(event_data, dict):
+                        continue
+
+                    extracted_text = None
+                    content_dict = event_data.get("content", {})
+                    if isinstance(content_dict, dict) and content_dict:
+                        parts = content_dict.get("parts", [])
+                        for p in parts:
+                            if isinstance(p, dict) and p.get("text"):
+                                text_val = p["text"].strip()
+                                if text_val.startswith("{") and "human_response" in text_val:
+                                    try:
+                                        triage_json = json.loads(text_val)
+                                        if triage_json.get("human_response"):
+                                            facilitator_human_responses.append(triage_json["human_response"])
+                                    except Exception:
+                                        pass
+                                elif not text_val.startswith("{"):
+                                    extracted_text = text_val
+                                    break
+
+                    if not extracted_text:
+                        output_val = event_data.get("output")
+                        if isinstance(output_val, str) and not output_val.startswith("{"):
+                            extracted_text = output_val
+                        elif isinstance(output_val, dict):
+                            parts = output_val.get("parts", [])
                             for p in parts:
                                 if isinstance(p, dict) and p.get("text"):
                                     text_val = p["text"].strip()
-                                    if text_val.startswith("{") and "human_response" in text_val:
-                                        try:
-                                            triage_json = json.loads(text_val)
-                                            if triage_json.get("human_response"):
-                                                facilitator_human_responses.append(triage_json["human_response"])
-                                        except Exception:
-                                            pass
-                                    elif not text_val.startswith("{"):
-                                        agent_text_chunks.append(text_val)
+                                    if not text_val.startswith("{"):
+                                        extracted_text = text_val
+                                        break
 
-                        output_val = event_data.get("output")
-                        if isinstance(output_val, str) and not output_val.startswith("{"):
-                            agent_text_chunks.append(output_val)
+                    if extracted_text:
+                        if not agent_text_chunks or agent_text_chunks[-1] != extracted_text:
+                            agent_text_chunks.append(extracted_text)
                 except Exception:
                     pass
 
