@@ -253,14 +253,15 @@ cd ..
      --role="roles/pubsub.publisher"
    ```
 
-3. **Create a Pub/Sub Push Subscription to forward events to the Agent Engine:**
+3. **Create a Pub/Sub Push Subscription to forward authenticated events to the Agent Engine:**
    ```bash
-   # Retrieve your Agent Engine API base URL and create push subscription targeting /pubsub/push
+   # Retrieve your Agent Engine API base URL and create push subscription targeting /pubsub/push with OIDC auth
    AGENT_ENDPOINT="https://${DEFAULT_GOOGLE_CLOUD_LOCATION:-us-east1}-aiplatform.googleapis.com/v1/${AGENT_RUNTIME_ID}/api/pubsub/push"
 
    gcloud pubsub subscriptions create github-human-events-sub \
      --topic=github-human-events \
      --push-endpoint="${AGENT_ENDPOINT}" \
+     --push-auth-service-account="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
      --project="${GOOGLE_CLOUD_PROJECT}"
    ```
 
