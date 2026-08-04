@@ -1,15 +1,110 @@
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-.pytest_cache/
-.coverage
-htmlcov/
-.DS_Store
+# ==============================================================================
+# Comprehensive .gitignore for Python, FastAPI, Google ADK & Cloud Services
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Environment Variables, API Keys & Certificates (CRITICAL SECRETS)
+# ------------------------------------------------------------------------------
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+*.pub
+*_service_account.json
+service-account*.json
+credentials.json
+deployment_metadata.json
+
+# ------------------------------------------------------------------------------
+# 2. Virtual Environments & Package Managers (uv, venv, pip)
+# ------------------------------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ------------------------------------------------------------------------------
+# 3. Python Bytecode & Build Artifacts
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ------------------------------------------------------------------------------
+# 4. Google ADK (Agent Development Kit), Sessions & SQLite DBs
+# ------------------------------------------------------------------------------
 .adk/
 *.db
+*.sqlite
+*.sqlite3
+*.log
+scratch/
+brain/
+
+# ------------------------------------------------------------------------------
+# 5. FastAPI, Pytest & Coverage
+# ------------------------------------------------------------------------------
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# ------------------------------------------------------------------------------
+# 6. Terraform & Infrastructure State
+# ------------------------------------------------------------------------------
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+_override.tf
+_override.tf.json
+
+# ------------------------------------------------------------------------------
+# 7. IDE, Editors & OS System Files
+# ------------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

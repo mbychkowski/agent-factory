@@ -11,23 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
-You can add your unit tests here.
-This is where you test your business logic, including agent functionality,
-data processing, and other core components of your application.
-"""
 
+FROM python:3.12-slim
 
-import unittest
+RUN pip install --no-cache-dir uv==0.8.13
 
+WORKDIR /code/gateway
 
-class TestDummy(unittest.TestCase):
+# Copy package requirements and source code from current directory
+COPY . /code/gateway
 
-    def test_dummy(self) -> None:
-        """Placeholder - replace with real tests."""
-        self.assertEqual(1, 1)
+# Install package dependencies into system python environment
+RUN uv pip install --system -e /code/gateway
 
+ENV PYTHONPATH=/code
 
-if __name__ == "__main__":
-    unittest.main()
+EXPOSE 8080
 
+CMD ["uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,0 +1,6 @@
+uv.lock
+.venv
+.git
+.env
+.pytest_cache
+__pycache__

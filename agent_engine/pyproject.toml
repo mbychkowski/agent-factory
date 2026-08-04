@@ -1,0 +1,25 @@
+[project]
+name = "agent-engine"
+version = "0.1.0"
+description = "Spec Deliberator Core Multi-Agent Engine Service"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "a2a-sdk[http-server]~=0.3.22",
+    "aiohttp>=3.13.4",
+    "google-adk[gcp]>=2.0.0,<3.0.0",
+    "google-auth>=2.56.1",
+    "python-dotenv>=1.2.2",
+    "google-cloud-logging>=3.10.0",
+    "google-cloud-storage>=2.14.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
+    "pydantic>=2.6.0",
+]
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["*"]

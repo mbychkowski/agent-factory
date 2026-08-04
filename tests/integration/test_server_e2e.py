@@ -61,7 +61,7 @@ def start_server() -> subprocess.Popen[str]:
         sys.executable,
         "-m",
         "uvicorn",
-        "app.fast_api_app:app",
+        "agent_engine.app.fast_api_app:app",
         "--host",
         "0.0.0.0",
         "--port",
