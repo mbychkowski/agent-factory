@@ -106,6 +106,42 @@ def create_github_issue(title: str, body: str, ctx: Context) -> Dict[str, Any]:
     return {"id": issue_id, "title": title, "status": "open"}
 
 
+def update_github_issue(issue_id: int, body: str, title: str = None, ctx: Context = None) -> Dict[str, Any]:
+    """Update an existing GitHub issue's body description and/or title.
+
+    Args:
+        issue_id: The ID of the GitHub issue to update.
+        body: The updated issue body markdown.
+        title: Optional updated title for the issue.
+    """
+    print(f"[Tool: GitHub] Updating GitHub issue #{issue_id} description...")
+    token = get_github_installation_token()
+    if token:
+        try:
+            import requests
+
+            headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+            repo = os.getenv("GITHUB_REPO", "mbychkowski/agent-factory")
+            url = f"https://api.github.com/repos/{repo}/issues/{issue_id}"
+            payload = {"body": body}
+            if title:
+                payload["title"] = title
+            resp = requests.patch(url, headers=headers, json=payload, timeout=10)
+            if resp.status_code in (200, 201):
+                issue_data = resp.json()
+                if ctx and hasattr(ctx, "state"):
+                    ctx.state["user_story_markdown"] = body
+                print(f"[Tool: GitHub] Successfully updated description for Issue #{issue_id} in {repo}")
+                return {"id": issue_id, "status": "updated", "url": issue_data.get("html_url")}
+            else:
+                print(f"[Tool: GitHub Update Error] ({resp.status_code}): {resp.text}")
+        except Exception as e:
+            print(f"[Tool: GitHub Update Error] {e}")
+
+    return {"id": issue_id, "status": "simulated_update"}
+
+
+
 def search_local_codebase(query: str, ctx: Context) -> List[Dict[str, Any]]:
     """Search the actual repository codebase for files, classes, functions, and standard packages.
 

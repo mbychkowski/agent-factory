@@ -155,13 +155,21 @@ async def gate_after_story_critic(node_input: Any, ctx: Context) -> Event:
 
 async def gate_after_story_refiner(ctx: Context) -> Event:
     """
-    Milestone 1 Gate: Verifies Parent Issue creation and checks for Human Approval sign-off.
+    Milestone 1 Gate: Verifies Parent Issue creation, updates main issue description on GitHub, and checks for Human Approval.
     """
     print("Cooling down for 4 seconds to manage API rate limits...")
     await asyncio.sleep(4)
 
     parent_id = ctx.state.get("parent_issue_id")
     user_story = ctx.state.get("user_story_markdown", "")
+
+    if parent_id and user_story:
+        try:
+            from agent_engine.agents.tools import update_github_issue
+            update_github_issue(issue_id=int(parent_id), body=user_story, ctx=ctx)
+            print(f"[Milestone 1 Gate] Automatically updated main GitHub Issue #{parent_id} description with certified User Story.")
+        except Exception as e:
+            print(f"[Milestone 1 Gate Warning] Could not auto-update issue #{parent_id}: {e}")
 
     # Check for Human Approval (or single-pass mode override)
     human_approved = ctx.state.get("human_story_approved", False) or ctx.state.get("single_pass_mode", False)
@@ -176,11 +184,12 @@ async def gate_after_story_refiner(ctx: Context) -> Event:
         return Event(output=guided_input, actions=EventActions(route="technical_designer"))
 
     elif parent_id:
-        print(f"Milestone 1 Gate: Parent Issue #{parent_id} created on GitHub. WAITING FOR HUMAN APPROVAL on GitHub.")
-        return Event(output=f"User Story Issue #{parent_id} created. Awaiting human approval on GitHub before drafting RFC.")
+        print(f"Milestone 1 Gate: Parent Issue #{parent_id} updated on GitHub. WAITING FOR HUMAN APPROVAL on GitHub.")
+        return Event(output=f"User Story Issue #{parent_id} updated with certified spec. Awaiting human approval on GitHub before drafting RFC.")
 
     print("Gate Evaluating: Parent Issue ID not found. Pausing execution.")
     return Event()
+
 
 
 async def gate_design_peer_review(node_input: Any, ctx: Context) -> Event:

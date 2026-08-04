@@ -54,8 +54,30 @@ Ask the user: Option A (simple single-project) or Option B (full CI/CD pipeline 
 
 - **Code preservation**: Only modify code directly targeted by the user's request. Preserve all surrounding code, config values (e.g., `model`), comments, and formatting.
 - **NEVER change the model** unless explicitly asked.
-- **Model 404 errors**: Fix `GOOGLE_CLOUD_LOCATION` (e.g., `global` instead of `us-east1`), not the model name.
+- **Model 404 errors**: Fix `DEFAULT_LLM_LOCATION` (e.g., `global` instead of `us-east1`), not the model name or `GOOGLE_CLOUD_LOCATION`.
 - **ADK tool imports**: Import the tool instance, not the module: `from google.adk.tools.load_web_page import load_web_page`
 - **Run Python with `uv`**: `uv run python script.py`. Run `agents-cli install` first.
 - **Stop on repeated errors**: If the same error appears 3+ times, fix the root cause instead of retrying.
 - **Terraform conflicts** (Error 409): Use `terraform import` instead of retrying creation.
+
+---
+
+## Environment Variable Guidelines
+
+| Variable Name | Scope / Surface | Purpose & Usage Guidelines | Example Value |
+|---------------|-----------------|----------------------------|---------------|
+| `GOOGLE_CLOUD_LOCATION` | Infra / Deployment | GCP region for Cloud Infrastructure (Cloud Run, Cloud Tasks queues, Reasoning Engine resource paths). MUST specify a regional location. | `us-central1` |
+| `DEFAULT_LLM_LOCATION` | Model Inference | Region for Gemini LLM publisher model inference endpoints. Use `global` or `us-central1` for Gemini models. | `global` |
+| `LLM_LOCATION` | Model Inference | Fallback override for LLM model location. | `global` |
+| `GOOGLE_CLOUD_PROJECT` | All | Target Google Cloud Project ID. | `your-gcp-project-id` |
+| `REASONING_ENGINE_ID` | Gateway | Full resource path to the Vertex AI Reasoning Engine instance. | `projects/123456789012/locations/us-central1/reasoningEngines/1234567890123456789` |
+| `CLOUD_RUN_GATEWAY_URL` | Gateway / Worker | Public HTTPS endpoint URL of the Cloud Run Gateway service. | `https://gateway-service-xyz-uc.a.run.app` |
+| `ENABLE_CLOUD_TASKS` | Gateway | Flag (`true`/`false`) to route webhook events through Cloud Tasks. | `true` |
+| `CLOUD_TASKS_QUEUE_ID` | Gateway | Name of the Cloud Tasks execution queue. | `my-agent-queue` |
+| `CLOUD_TASKS_LOCATION` | Gateway | GCP region where the Cloud Tasks queue is hosted. | `us-central1` |
+| `GITHUB_WEBHOOK_SECRET` | Gateway | Secret used for verifying GitHub Webhook HMAC `X-Hub-Signature-256`. | `your_webhook_secret` |
+| `GITHUB_APP_ID` | Gateway / Agent | App ID for GitHub App authentication. | `123456` |
+| `GITHUB_APP_INSTALLATION_ID` | Gateway / Agent | Installation ID for target GitHub repository. | `12345678` |
+| `GITHUB_REPO` | Gateway / Agent | Target GitHub repository (`owner/repo`). | `owner/repo` |
+| `GITHUB_APP_PRIVATE_KEY` | Gateway / Agent | PEM RSA Private Key string for generating GitHub App installation tokens. | `-----BEGIN RSA PRIVATE KEY-----...` |
+
