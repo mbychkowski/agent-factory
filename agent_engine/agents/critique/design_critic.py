@@ -2,7 +2,7 @@ import os
 from google.adk.agents import LlmAgent
 from .schemas import CritiqueResult
 
-DEFAULT_LLM = os.environ.get("DEFAULT_LLM", "gemini-2.5-flash")
+DEFAULT_LLM = os.environ.get("DEFAULT_LLM", "gemini-3.6-flash")
 
 DESIGN_CRITIC_PROMPT = """You are an expert Engineering Lead performing a Feasibility Peer Review on an RFC Technical Design draft before it is posted for human sign-off.
 

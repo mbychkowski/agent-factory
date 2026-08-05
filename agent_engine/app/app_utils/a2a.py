@@ -77,12 +77,7 @@ def _resolve_app_url(app_url: str | None) -> str:
 
     agent_engine_id = os.getenv("GOOGLE_CLOUD_AGENT_ENGINE_ID")
     project = os.getenv("GOOGLE_CLOUD_PROJECT")
-    # Not GOOGLE_CLOUD_LOCATION: the agent pins it to "global", which would build
-    # an invalid "global-aiplatform.googleapis.com" URL.
-    location = (
-        os.getenv("GOOGLE_CLOUD_AGENT_ENGINE_LOCATION")
-        or os.getenv("DEFAULT_GOOGLE_CLOUD_LOCATION", "us-east1")
-    )
+    location = os.getenv("GOOGLE_CLOUD_LOCATION")
     if agent_engine_id and project and location:
         return (
             f"https://{location}-aiplatform.googleapis.com/reasoningEngines/v1"

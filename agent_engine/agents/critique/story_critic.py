@@ -2,7 +2,7 @@ import os
 from google.adk.agents import LlmAgent
 from .schemas import CritiqueResult
 
-DEFAULT_LLM = os.environ.get("DEFAULT_LLM", "gemini-2.5-flash")
+DEFAULT_LLM = os.environ.get("DEFAULT_LLM", "gemini-3.6-flash")
 
 STORY_CRITIC_PROMPT = """You are an expert Software Architect performing a Technical Peer Review on a drafted User Story before it gets published to GitHub for human sign-off.
 

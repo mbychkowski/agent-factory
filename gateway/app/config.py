@@ -8,15 +8,7 @@ class GatewayConfig:
 
     @property
     def google_cloud_project(self) -> str:
-        return os.environ.get("GOOGLE_CLOUD_PROJECT", os.environ.get("GCP_PROJECT_ID", "default_project"))
-
-    @property
-    def pubsub_topic_id(self) -> str:
-        return os.environ.get("PUBSUB_TOPIC_ID", "github-human-events")
-
-    @property
-    def enable_pubsub(self) -> bool:
-        return os.environ.get("ENABLE_PUBSUB", "false").lower() in ("true", "1", "yes")
+        return os.environ.get("GOOGLE_CLOUD_PROJECT", "default_project")
 
     @property
     def agent_api_url(self) -> str:
@@ -27,8 +19,12 @@ class GatewayConfig:
         return os.environ.get("CLOUD_TASKS_QUEUE_ID", "github-agent-queue")
 
     @property
+    def google_cloud_location(self) -> str:
+        return os.environ.get("GOOGLE_CLOUD_LOCATION", os.environ.get("DEFAULT_GOOGLE_CLOUD_LOCATION", "us-east1"))
+
+    @property
     def cloud_tasks_location(self) -> str:
-        return os.environ.get("CLOUD_TASKS_LOCATION", "us-east1")
+        return os.environ.get("GOOGLE_CLOUD_LOCATION", os.environ.get("CLOUD_TASKS_LOCATION", "us-east1"))
 
     @property
     def enable_cloud_tasks(self) -> bool:
@@ -44,7 +40,7 @@ class GatewayConfig:
 
     @property
     def reasoning_engine_location(self) -> str:
-        return os.environ.get("REASONING_ENGINE_LOCATION", "us-east1")
+        return os.environ.get("GOOGLE_CLOUD_LOCATION", os.environ.get("REASONING_ENGINE_LOCATION", "us-east1"))
 
 
 config = GatewayConfig()

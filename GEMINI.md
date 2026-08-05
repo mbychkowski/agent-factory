@@ -54,7 +54,10 @@ Ask the user: Option A (simple single-project) or Option B (full CI/CD pipeline 
 
 - **Code preservation**: Only modify code directly targeted by the user's request. Preserve all surrounding code, config values (e.g., `model`), comments, and formatting.
 - **NEVER change the model** unless explicitly asked.
-- **Model 404 errors**: Fix `DEFAULT_LLM_LOCATION` (e.g., `global` instead of `us-east1`), not the model name or `GOOGLE_CLOUD_LOCATION`.
+- **Model 404 errors**: Fix `DEFAULT_LLM_LOCATION` / `LLM_LOCATION` (e.g., `global` instead of `us-east1`), NOT the model name or `GOOGLE_CLOUD_LOCATION`.
+- **Model Inference vs Infrastructure Locations**:
+  - **`LLM_LOCATION` / `DEFAULT_LLM_LOCATION`**: **MUST** be used for all Vertex AI Gemini model inference calls and `VertexAiSessionService` sessions (defaults to `global`). Never pass `GOOGLE_CLOUD_LOCATION` to Vertex AI model inference calls.
+  - **`GOOGLE_CLOUD_LOCATION`**: **MUST** be used for GCP infrastructure resources (Cloud Run services, Cloud Tasks queues, Artifact Registry, and Reasoning Engine resource paths like `us-east1`).
 - **ADK tool imports**: Import the tool instance, not the module: `from google.adk.tools.load_web_page import load_web_page`
 - **Run Python with `uv`**: `uv run python script.py`. Run `agents-cli install` first.
 - **Stop on repeated errors**: If the same error appears 3+ times, fix the root cause instead of retrying.
@@ -66,9 +69,9 @@ Ask the user: Option A (simple single-project) or Option B (full CI/CD pipeline 
 
 | Variable Name | Scope / Surface | Purpose & Usage Guidelines | Example Value |
 |---------------|-----------------|----------------------------|---------------|
-| `GOOGLE_CLOUD_LOCATION` | Infra / Deployment | GCP region for Cloud Infrastructure (Cloud Run, Cloud Tasks queues, Reasoning Engine resource paths). MUST specify a regional location. | `us-central1` |
-| `DEFAULT_LLM_LOCATION` | Model Inference | Region for Gemini LLM publisher model inference endpoints. Use `global` or `us-central1` for Gemini models. | `global` |
-| `LLM_LOCATION` | Model Inference | Fallback override for LLM model location. | `global` |
+| `GOOGLE_CLOUD_LOCATION` | Infra / Deployment | GCP region for Cloud Infrastructure (Cloud Run, Cloud Tasks queues, Reasoning Engine resource paths). MUST specify a regional location (e.g. `us-east1`, `us-central1`). | `us-east1` |
+| `DEFAULT_LLM_LOCATION` | Model Inference | Region for Gemini LLM publisher model inference endpoints. MUST use `global` or `us-central1` for Gemini model calls. | `global` |
+| `LLM_LOCATION` | Model Inference | Primary environment variable for Vertex AI Gemini LLM inference and session endpoints. ALWAYS set to `global` for model inference. | `global` |
 | `GOOGLE_CLOUD_PROJECT` | All | Target Google Cloud Project ID. | `your-gcp-project-id` |
 | `REASONING_ENGINE_ID` | Gateway | Full resource path to the Vertex AI Reasoning Engine instance. | `projects/123456789012/locations/us-central1/reasoningEngines/1234567890123456789` |
 | `CLOUD_RUN_GATEWAY_URL` | Gateway / Worker | Public HTTPS endpoint URL of the Cloud Run Gateway service. | `https://gateway-service-xyz-uc.a.run.app` |
