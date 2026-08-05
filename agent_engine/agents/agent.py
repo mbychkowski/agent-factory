@@ -118,7 +118,13 @@ async def gate_story_peer_review(node_input: Any, ctx: Context) -> Event:
     """
     Triggers story_critic to review the drafted User Story before publishing to GitHub.
     """
+    raw_input = node_input if isinstance(node_input, str) else str(node_input)
     user_story = ctx.state.get("user_story_markdown", "")
+
+    if not user_story and raw_input and len(raw_input.strip()) > 20:
+        ctx.state["user_story_markdown"] = raw_input.strip()
+        user_story = raw_input.strip()
+
     if not user_story:
         print("Story Peer Review: No user story found in state yet. Returning.")
         return Event(output=node_input)
@@ -220,7 +226,13 @@ async def gate_design_peer_review(node_input: Any, ctx: Context) -> Event:
     """
     Triggers design_critic to review the drafted RFC Technical Design before publishing comment.
     """
+    raw_input = node_input if isinstance(node_input, str) else str(node_input)
     tech_design = ctx.state.get("tech_design_markdown", "")
+
+    if not tech_design and raw_input and len(raw_input.strip()) > 20:
+        ctx.state["tech_design_markdown"] = raw_input.strip()
+        tech_design = raw_input.strip()
+
     if not tech_design:
         return Event(output=node_input)
 
@@ -277,6 +289,16 @@ async def gate_after_technical_designer(ctx: Context) -> Event:
     parent_id = ctx.state.get("parent_issue_id")
     tech_design = ctx.state.get("tech_design_markdown", "")
     human_approved = ctx.state.get("human_design_approved", False) or ctx.state.get("single_pass_mode", False)
+
+    # Auto-publish RFC design comment if not yet published on GitHub
+    if parent_id and tech_design and not tech_design_id:
+        try:
+            from agent_engine.agents.tools import add_design_comment
+            add_design_comment(int(parent_id), tech_design, ctx=ctx)
+            tech_design_id = ctx.state.get("tech_design_comment_id")
+            print(f"[Milestone 2 Gate] Automatically posted RFC design comment #{tech_design_id} to Issue #{parent_id}.")
+        except Exception as e:
+            print(f"[Milestone 2 Gate Comment Warning] {e}")
 
     if ctx.state.get("tech_design_completed") and tech_design_id and human_approved:
         print(f"Milestone 2 Passed: RFC Comment #{tech_design_id} confirmed & Human Approved. Proceeding to Task Planner.")

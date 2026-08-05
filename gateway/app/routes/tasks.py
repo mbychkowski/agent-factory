@@ -60,6 +60,15 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
         "Content-Type": "application/json",
     }
 
+    # 1b. Mark issue as in-progress immediately upon turn execution
+    if issue_id:
+        try:
+            from agent_engine.agents.tools import sync_github_issue_labels
+            sync_github_issue_labels(int(issue_id), status_label="agent:in-progress", phase_label="")
+            logger.info(f"Task Worker: Marked Issue #{issue_id} as agent:in-progress at turn start.")
+        except Exception as label_err:
+            logger.warning(f"Task Worker: Could not set initial in-progress label on Issue #{issue_id}: {label_err}")
+
     # 2. Ensure session exists with session state in Vertex AI Session Service
     query_url = f"https://us-east1-aiplatform.googleapis.com/v1/{engine_resource}:query"
     create_session_body = {
@@ -121,9 +130,10 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
             output_preview = response_text[:1000]
             logger.info(f"Task Worker: Reasoning Engine output preview ({len(raw_bytes)} bytes):\n{output_preview}")
 
-            # Parse output text from Reasoning Engine stream events
+            # Parse output text and tool calls from Reasoning Engine stream events
             agent_text_chunks = []
             facilitator_human_responses = []
+            tool_calls_detected = False
 
             for line in response_text.splitlines():
                 line = line.strip()
@@ -134,8 +144,20 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
                     if not isinstance(event_data, dict):
                         continue
 
-                    extracted_text = None
+                    # Check for tool/function calls in event data
                     content_dict = event_data.get("content", {})
+                    if isinstance(content_dict, dict) and content_dict:
+                        parts = content_dict.get("parts", [])
+                        for p in parts:
+                            if isinstance(p, dict):
+                                if "functionCall" in p or "function_call" in p:
+                                    fc = p.get("functionCall") or p.get("function_call")
+                                    fc_name = fc.get("name", "") if isinstance(fc, dict) else ""
+                                    if fc_name in ("add_design_comment", "create_github_issue", "update_github_issue", "create_developer_sub_issue"):
+                                        logger.info(f"Task Worker: Detected tool call '{fc_name}' in stream.")
+                                        tool_calls_detected = True
+
+                    extracted_text = None
                     if isinstance(content_dict, dict) and content_dict:
                         parts = content_dict.get("parts", [])
                         for p in parts:
@@ -186,18 +208,20 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
                     pass
 
             raw_comment = ""
-            if agent_text_chunks:
-                raw_comment = "\n\n".join(agent_text_chunks).strip()
-            elif facilitator_human_responses:
+            if facilitator_human_responses:
                 raw_comment = "\n\n".join(facilitator_human_responses).strip()
+            elif not tool_calls_detected and agent_text_chunks:
+                raw_comment = "\n\n".join(agent_text_chunks).strip()
 
             comment_body = f"commentor: {active_author}\n\n{raw_comment}" if raw_comment else ""
 
             posted = False
-            if issue_id and comment_body:
+            if issue_id and comment_body and not tool_calls_detected:
                 from gateway.app.utils.github_commenter import post_agent_github_comment
                 logger.info(f"Task Worker: Posting agent response ({len(comment_body)} bytes) to Issue #{issue_id}...")
                 posted = post_agent_github_comment(int(issue_id), comment_body)
+            elif tool_calls_detected:
+                logger.info(f"Task Worker: Tool call handled GitHub interaction directly. Suppressed duplicate comment post on Issue #{issue_id}.")
 
 
             logger.info(f"Task Worker: Successfully executed turn for event {event_id}. Posted comment: {posted}")

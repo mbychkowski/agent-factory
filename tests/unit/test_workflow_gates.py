@@ -49,6 +49,28 @@ class TestWorkflowGates(unittest.TestCase):
         self.assertEqual(event.actions.route, "technical_designer")
         self.assertEqual(ctx.state["synthesized_feedback"], "Use Spanner DB instead of Postgres.")
 
+    def test_gate_story_peer_review_populates_state(self) -> None:
+        from agent_engine.agents.agent import gate_story_peer_review
+        ctx = MagicMock(spec=Context)
+        ctx.state = {}
+
+        raw_story_text = "As a user, I want to authenticate via JWT token so that my session is secure."
+        event = asyncio_run(gate_story_peer_review(raw_story_text, ctx))
+
+        self.assertEqual(ctx.state["user_story_markdown"], raw_story_text)
+        self.assertEqual(event.actions.route, "story_critic")
+
+    def test_gate_design_peer_review_populates_state(self) -> None:
+        from agent_engine.agents.agent import gate_design_peer_review
+        ctx = MagicMock(spec=Context)
+        ctx.state = {}
+
+        raw_design_text = "### Architecture Overview\nUse Google Cloud Spanner and Cloud Run Gateway."
+        event = asyncio_run(gate_design_peer_review(raw_design_text, ctx))
+
+        self.assertEqual(ctx.state["tech_design_markdown"], raw_design_text)
+        self.assertEqual(event.actions.route, "design_critic")
+
 
 def asyncio_run(coro):
     import asyncio

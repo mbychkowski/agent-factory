@@ -13,5 +13,5 @@ if project_id:
 
 os.environ.setdefault("DEFAULT_GOOGLE_CLOUD_LOCATION", "us-east1")
 os.environ.setdefault("DEFAULT_LLM_LOCATION", "global")
-os.environ.setdefault("GOOGLE_CLOUD_LOCATION", os.getenv("DEFAULT_GOOGLE_CLOUD_LOCATION", "us-east1"))
+os.environ["GOOGLE_CLOUD_LOCATION"] = "global"
 os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "True")
