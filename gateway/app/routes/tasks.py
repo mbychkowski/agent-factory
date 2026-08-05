@@ -14,10 +14,78 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+GITHUB_ACTION_TOOLS = {
+    "add_design_comment",
+    "create_github_issue",
+    "update_github_issue",
+    "create_developer_sub_issue",
+}
+
+
+def _parse_stream_response(response_text: str) -> tuple[list[str], list[str], bool, str]:
+    """Parses streaming events to extract text chunks, facilitator responses, tool call flags, and author."""
+    agent_text_chunks = []
+    facilitator_responses = []
+    tool_calls_detected = False
+    active_author = "spec-deliberator-agent"
+
+    for line in response_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+            if not isinstance(event, dict):
+                continue
+
+            author = event.get("author")
+            if author and author not in ("agile_github_planning_app", "root_workflow"):
+                active_author = author
+
+            parts = []
+            if isinstance(event.get("content"), dict):
+                parts = event["content"].get("parts", [])
+            elif isinstance(event.get("output"), dict):
+                parts = event["output"].get("parts", [])
+
+            extracted_text = None
+            for p in parts:
+                if not isinstance(p, dict):
+                    continue
+
+                fc = p.get("functionCall") or p.get("function_call")
+                if isinstance(fc, dict) and fc.get("name") in GITHUB_ACTION_TOOLS:
+                    tool_calls_detected = True
+
+                text = p.get("text", "").strip()
+                if text:
+                    if text.startswith("{") and "human_response" in text:
+                        try:
+                            if hr := json.loads(text).get("human_response"):
+                                facilitator_responses.append(hr)
+                        except Exception:
+                            pass
+                    elif not text.startswith("{"):
+                        extracted_text = text
+
+            if not extracted_text and isinstance(event.get("output"), str):
+                out_str = event["output"].strip()
+                if not out_str.startswith("{"):
+                    extracted_text = out_str
+
+            if extracted_text and (not agent_text_chunks or agent_text_chunks[-1] != extracted_text):
+                agent_text_chunks.append(extracted_text)
+
+        except Exception:
+            pass
+
+    return agent_text_chunks, facilitator_responses, tool_calls_detected, active_author
+
+
 @router.post("/tasks/execute-agent-turn", status_code=200)
 async def execute_agent_turn(request: Request) -> Dict[str, Any]:
-    """
-    Cloud Tasks Worker Endpoint. Decodes task payload and invokes the Vertex AI
+    """Cloud Tasks Worker Endpoint. Decodes task payload and invokes the Vertex AI
+
     Reasoning Engine agent via its official REST API.
     """
     try:
@@ -32,10 +100,11 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
     actor_info = payload.get("actor", {})
     user_id = actor_info.get("user_id", "github_user") if isinstance(actor_info, dict) else "github_user"
 
-    if issue_id:
-        thread_ref = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"github.issue.{issue_id}"))
-    else:
-        thread_ref = str(uuid.uuid5(uuid.NAMESPACE_DNS, "github.general"))
+    thread_ref = (
+        str(uuid.uuid5(uuid.NAMESPACE_DNS, f"github.issue.{issue_id}"))
+        if issue_id
+        else str(uuid.uuid5(uuid.NAMESPACE_DNS, "github.general"))
+    )
 
     logger.info(f"Task Worker: Executing agent turn for event {event_id} on session {thread_ref}")
 
@@ -60,7 +129,6 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
         "Content-Type": "application/json",
     }
 
-    # 1b. Mark issue as in-progress immediately upon turn execution
     if issue_id:
         try:
             from agent_engine.agents.tools import sync_github_issue_labels
@@ -69,7 +137,7 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
         except Exception as label_err:
             logger.warning(f"Task Worker: Could not set initial in-progress label on Issue #{issue_id}: {label_err}")
 
-    # 2. Ensure session exists with session state in Vertex AI Session Service
+    # Ensure session exists with session state in Vertex AI Session Service
     query_url = f"https://us-east1-aiplatform.googleapis.com/v1/{engine_resource}:query"
     create_session_body = {
         "class_method": "async_create_session",
@@ -79,14 +147,13 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
             "state": {"parent_issue_id": int(issue_id) if issue_id else None},
         },
     }
-    
+
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             session_resp = await client.post(query_url, json=create_session_body, headers=headers)
             logger.info(f"Task Worker: Session initialization status {session_resp.status_code}")
     except Exception as e:
         logger.warning(f"Task Worker: Session creation check warning: {e}")
-
 
     raw_payload = payload.get("raw_payload", {})
     issue_data = raw_payload.get("issue", {}) if isinstance(raw_payload, dict) else {}
@@ -102,7 +169,6 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
         if issue_id
         else f"Received GitHub interaction event ({interaction_type}):\n\n{content_text}"
     )
-
 
     request_body = {
         "class_method": "async_stream_query",
@@ -130,82 +196,9 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
             output_preview = response_text[:1000]
             logger.info(f"Task Worker: Reasoning Engine output preview ({len(raw_bytes)} bytes):\n{output_preview}")
 
-            # Parse output text and tool calls from Reasoning Engine stream events
-            agent_text_chunks = []
-            facilitator_human_responses = []
-            tool_calls_detected = False
-
-            for line in response_text.splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    event_data = json.loads(line)
-                    if not isinstance(event_data, dict):
-                        continue
-
-                    # Check for tool/function calls in event data
-                    content_dict = event_data.get("content", {})
-                    if isinstance(content_dict, dict) and content_dict:
-                        parts = content_dict.get("parts", [])
-                        for p in parts:
-                            if isinstance(p, dict):
-                                if "functionCall" in p or "function_call" in p:
-                                    fc = p.get("functionCall") or p.get("function_call")
-                                    fc_name = fc.get("name", "") if isinstance(fc, dict) else ""
-                                    if fc_name in ("add_design_comment", "create_github_issue", "update_github_issue", "create_developer_sub_issue"):
-                                        logger.info(f"Task Worker: Detected tool call '{fc_name}' in stream.")
-                                        tool_calls_detected = True
-
-                    extracted_text = None
-                    if isinstance(content_dict, dict) and content_dict:
-                        parts = content_dict.get("parts", [])
-                        for p in parts:
-                            if isinstance(p, dict) and p.get("text"):
-                                text_val = p["text"].strip()
-                                if text_val.startswith("{") and "human_response" in text_val:
-                                    try:
-                                        triage_json = json.loads(text_val)
-                                        if triage_json.get("human_response"):
-                                            facilitator_human_responses.append(triage_json["human_response"])
-                                    except Exception:
-                                        pass
-                                elif not text_val.startswith("{"):
-                                    extracted_text = text_val
-                                    break
-
-                    if not extracted_text:
-                        output_val = event_data.get("output")
-                        if isinstance(output_val, str) and not output_val.startswith("{"):
-                            extracted_text = output_val
-                        elif isinstance(output_val, dict):
-                            parts = output_val.get("parts", [])
-                            for p in parts:
-                                if isinstance(p, dict) and p.get("text"):
-                                    text_val = p["text"].strip()
-                                    if not text_val.startswith("{"):
-                                        extracted_text = text_val
-                                        break
-
-                    if extracted_text:
-                        if not agent_text_chunks or agent_text_chunks[-1] != extracted_text:
-                            agent_text_chunks.append(extracted_text)
-                except Exception:
-                    pass
-
-            active_author = "spec-deliberator-agent"
-            for line in response_text.splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    event_data = json.loads(line)
-                    if isinstance(event_data, dict) and event_data.get("author"):
-                        a = event_data["author"]
-                        if a not in ("agile_github_planning_app", "root_workflow"):
-                            active_author = a
-                except Exception:
-                    pass
+            agent_text_chunks, facilitator_human_responses, tool_calls_detected, active_author = (
+                _parse_stream_response(response_text)
+            )
 
             raw_comment = ""
             if facilitator_human_responses:
@@ -222,7 +215,6 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
                 posted = post_agent_github_comment(int(issue_id), comment_body)
             elif tool_calls_detected:
                 logger.info(f"Task Worker: Tool call handled GitHub interaction directly. Suppressed duplicate comment post on Issue #{issue_id}.")
-
 
             logger.info(f"Task Worker: Successfully executed turn for event {event_id}. Posted comment: {posted}")
             return {

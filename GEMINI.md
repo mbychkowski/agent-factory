@@ -56,8 +56,8 @@ Ask the user: Option A (simple single-project) or Option B (full CI/CD pipeline 
 - **NEVER change the model** unless explicitly asked.
 - **Model 404 errors**: Fix `DEFAULT_LLM_LOCATION` / `LLM_LOCATION` (e.g., `global` instead of `us-east1`), NOT the model name or `GOOGLE_CLOUD_LOCATION`.
 - **Model Inference vs Infrastructure Locations**:
-  - **`LLM_LOCATION` / `DEFAULT_LLM_LOCATION`**: **MUST** be used for all Vertex AI Gemini model inference calls and `VertexAiSessionService` sessions (defaults to `global`). Never pass `GOOGLE_CLOUD_LOCATION` to Vertex AI model inference calls.
-  - **`GOOGLE_CLOUD_LOCATION`**: **MUST** be used for GCP infrastructure resources (Cloud Run services, Cloud Tasks queues, Artifact Registry, and Reasoning Engine resource paths like `us-east1`).
+  - **`LLM_LOCATION` / `DEFAULT_LLM_LOCATION`**: **MUST** be used for all Vertex AI Gemini model inference calls (defaults to `global`). Never pass `GOOGLE_CLOUD_LOCATION` to Vertex AI model inference calls.
+  - **`GOOGLE_CLOUD_LOCATION`**: **MUST** be used for GCP infrastructure resources (Cloud Run services, Cloud Tasks queues, Artifact Registry, `VertexAiSessionService` sessions, and Reasoning Engine resource paths like `us-east1`).
 - **ADK tool imports**: Import the tool instance, not the module: `from google.adk.tools.load_web_page import load_web_page`
 - **Run Python with `uv`**: `uv run python script.py`. Run `agents-cli install` first.
 - **Stop on repeated errors**: If the same error appears 3+ times, fix the root cause instead of retrying.

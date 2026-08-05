@@ -11,26 +11,25 @@ def get_github_installation_token() -> str:
     app_id = os.getenv("GITHUB_APP_ID", "4487667")
     installation_id = os.getenv("GITHUB_APP_INSTALLATION_ID", "151266010")
     pem_string = os.getenv("GITHUB_APP_PRIVATE_KEY")
-    pem_path = os.getenv("GITHUB_APP_PRIVATE_KEY_PATH", "./agent-factory-spec-deliberator.2026-08-04.private-key.pem")
 
     private_key_str = ""
     if pem_string:
         private_key_str = pem_string.replace("\\n", "\n")
     else:
-        pem_paths = [
-            os.getenv("GITHUB_APP_PRIVATE_KEY_PATH", ""),
+        candidate_paths = [
+            os.getenv("GITHUB_APP_PRIVATE_KEY_PATH"),
             "gateway/app/private-key.pem",
             "app/private-key.pem",
             "private-key.pem",
             "./agent-factory-spec-deliberator.2026-08-04.private-key.pem",
         ]
-        for p in pem_paths:
-            if p and os.path.exists(p):
+        for path in filter(None, candidate_paths):
+            if os.path.exists(path):
                 try:
-                    with open(p, "r", encoding="utf-8") as f:
+                    with open(path, "r", encoding="utf-8") as f:
                         private_key_str = f.read()
                     if private_key_str.strip():
-                        logger.info(f"[GitHub Commenter] Loaded private key from {p}")
+                        logger.info(f"[GitHub Commenter] Loaded private key from {path}")
                         break
                 except Exception:
                     pass

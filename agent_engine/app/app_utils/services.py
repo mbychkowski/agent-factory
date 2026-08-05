@@ -48,8 +48,8 @@ def get_session_service():
 
         return VertexAiSessionService(
             project=os.environ.get("GOOGLE_CLOUD_PROJECT"),
-            location=os.environ.get("LLM_LOCATION", "global"),
-            agent_engine_id=agent_engine_id
+            location=os.environ.get("GOOGLE_CLOUD_LOCATION"),
+            agent_engine_id=agent_engine_id,
         )
     from google.adk.sessions.in_memory_session_service import InMemorySessionService
 

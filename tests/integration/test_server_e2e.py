@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "http://127.0.0.1:8000"
 RUN_SSE_URL = BASE_URL + "/run_sse"
-A2A_RPC_URL = BASE_URL + "/a2a/app/"
+A2A_RPC_URL = BASE_URL + "/a2a/agile_github_planning_app/"
 AGENT_CARD_URL = A2A_RPC_URL + ".well-known/agent-card.json"
 FEEDBACK_URL = BASE_URL + "/feedback"
 
