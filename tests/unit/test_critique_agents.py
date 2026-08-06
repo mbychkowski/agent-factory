@@ -1,7 +1,5 @@
 import unittest
-from agent_engine.agents.critique.story_critic import story_critic_agent
-from agent_engine.agents.critique.design_critic import design_critic_agent
-from agent_engine.agents.critique.schemas import CritiqueResult
+from agent_engine.agents.story_critic import CritiqueResult, story_critic_agent
 
 
 class TestCritiqueAgents(unittest.TestCase):
@@ -9,10 +7,6 @@ class TestCritiqueAgents(unittest.TestCase):
     def test_story_critic_agent_initialization(self) -> None:
         self.assertEqual(story_critic_agent.name, "story_critic")
         self.assertEqual(story_critic_agent.output_schema, CritiqueResult)
-
-    def test_design_critic_agent_initialization(self) -> None:
-        self.assertEqual(design_critic_agent.name, "design_critic")
-        self.assertEqual(design_critic_agent.output_schema, CritiqueResult)
 
     def test_critique_result_schema(self) -> None:
         res = CritiqueResult(

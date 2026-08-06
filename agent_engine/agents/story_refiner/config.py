@@ -1,9 +1,15 @@
 import os
 
+# Ensure LLM inference location defaults to global as required for Gemini models
+os.environ.setdefault("DEFAULT_LLM_LOCATION", "global")
+os.environ.setdefault("LLM_LOCATION", "global")
+os.environ.setdefault("LOCATION", "global")
+
+
 class Config:
     @property
     def default_llm(self) -> str:
-        # Defaulting to gemini-2.5-flash which is standard in Google ADK
         return os.environ.get("DEFAULT_LLM", "gemini-3.6-flash")
+
 
 config = Config()

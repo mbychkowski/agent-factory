@@ -25,10 +25,9 @@ packaged Agent Engine.
 import inspect
 import json
 
+from agent_engine.app.app_utils import services
 from fastapi import FastAPI, HTTPException, Request, encoders, responses
 from vertexai.agent_engines.templates.adk import AdkApp
-
-from agent_engine.app.app_utils import services
 
 
 def attach_reasoning_engine_routes(app: FastAPI) -> None:

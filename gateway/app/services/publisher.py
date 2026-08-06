@@ -69,23 +69,6 @@ async def publish_event(event: HumanInteractionEvent) -> bool:
                 logger.info(f"Task already enqueued for event {event.event_id} (deduplicated).")
                 return True
             logger.error(f"Failed to enqueue task to Cloud Tasks: {e}")
-            if not config.enable_pubsub:
-                return False
-
-    if config.enable_pubsub:
-        try:
-            from google.cloud import pubsub_v1
-
-            publisher = pubsub_v1.PublisherClient()
-            topic_path = publisher.topic_path(config.google_cloud_project, config.pubsub_topic_id)
-            data = json.dumps(payload_dict).encode("utf-8")
-
-            future = publisher.publish(topic_path, data=data, event_type=event.interaction_type.value)
-            message_id = future.result(timeout=5.0)
-            logger.info(f"Published event {event.event_id} to Pub/Sub topic {config.pubsub_topic_id}, msg_id: {message_id}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to publish to Pub/Sub: {e}")
             return False
 
     # Local Dev Mode: Forward directly via HTTP

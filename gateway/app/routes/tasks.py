@@ -22,10 +22,9 @@ GITHUB_ACTION_TOOLS = {
 }
 
 
-def _parse_stream_response(response_text: str) -> tuple[list[str], list[str], bool, str]:
-    """Parses streaming events to extract text chunks, facilitator responses, tool call flags, and author."""
+def _parse_stream_response(response_text: str) -> tuple[list[str], bool, str]:
+    """Parses streaming events to extract text chunks, tool call flags, and author."""
     agent_text_chunks = []
-    facilitator_responses = []
     tool_calls_detected = False
     active_author = "spec-deliberator-agent"
 
@@ -58,15 +57,8 @@ def _parse_stream_response(response_text: str) -> tuple[list[str], list[str], bo
                     tool_calls_detected = True
 
                 text = p.get("text", "").strip()
-                if text:
-                    if text.startswith("{") and "human_response" in text:
-                        try:
-                            if hr := json.loads(text).get("human_response"):
-                                facilitator_responses.append(hr)
-                        except Exception:
-                            pass
-                    elif not text.startswith("{"):
-                        extracted_text = text
+                if text and not text.startswith("{"):
+                    extracted_text = text
 
             if not extracted_text and isinstance(event.get("output"), str):
                 out_str = event["output"].strip()
@@ -79,7 +71,7 @@ def _parse_stream_response(response_text: str) -> tuple[list[str], list[str], bo
         except Exception:
             pass
 
-    return agent_text_chunks, facilitator_responses, tool_calls_detected, active_author
+    return agent_text_chunks, tool_calls_detected, active_author
 
 
 @router.post("/tasks/execute-agent-turn", status_code=200)
@@ -139,12 +131,23 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
 
     # Ensure session exists with session state in Vertex AI Session Service
     query_url = f"https://us-east1-aiplatform.googleapis.com/v1/{engine_resource}:query"
+    parsed_issue_id = int(issue_id) if issue_id else None
     create_session_body = {
         "class_method": "async_create_session",
         "input": {
             "user_id": user_id,
             "session_id": thread_ref,
-            "state": {"parent_issue_id": int(issue_id) if issue_id else None},
+            "state": {
+                "parent_issue_id": parsed_issue_id,
+                "issue": {"id": parsed_issue_id} if parsed_issue_id else {},
+                "specifications": {
+                    "user_story_markdown": "",
+                    "story_peer_reviewed": False,
+                    "story_review_rounds": 0,
+                    "critique_history": [],
+                },
+                "comments": [],
+            },
         },
     }
 
@@ -196,14 +199,12 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
             output_preview = response_text[:1000]
             logger.info(f"Task Worker: Reasoning Engine output preview ({len(raw_bytes)} bytes):\n{output_preview}")
 
-            agent_text_chunks, facilitator_human_responses, tool_calls_detected, active_author = (
+            agent_text_chunks, tool_calls_detected, active_author = (
                 _parse_stream_response(response_text)
             )
 
             raw_comment = ""
-            if facilitator_human_responses:
-                raw_comment = "\n\n".join(facilitator_human_responses).strip()
-            elif not tool_calls_detected and agent_text_chunks:
+            if not tool_calls_detected and agent_text_chunks:
                 raw_comment = "\n\n".join(agent_text_chunks).strip()
 
             comment_body = f"commentor: {active_author}\n\n{raw_comment}" if raw_comment else ""

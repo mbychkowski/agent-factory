@@ -2,82 +2,87 @@
 
 An enterprise-grade, spec-driven multi-agent system built on top of the **Google Agent Development Kit (ADK 2.0)** and managed under the **`uv`** package manager.
 
-This system automates the process of transforming raw ideas or incomplete draft requirements into complete, production-ready development specifications through **cross-role agent peer review** and **milestone human approval gates** on GitHub.
+This system operates as a **Multi-Tenant GitHub App** that transforms raw ideas or incomplete draft requirements into complete, production-ready development specifications across **any installed GitHub repository** through **cross-role agent peer review** and automated GitHub issue synchronization.
 
 ---
 
-## 🔄 Multi-Agent Deliberation Architecture
+## 🏗️ Multi-Tenant GitHub App Vision & Architecture
+
+The Spec Deliberator Agent is built to run as a multi-tenant GitHub App service deployed on Google Cloud Agent Runtime / Cloud Run:
+
+```
+  ┌──────────────────────┐  1. GitHub Webhook (Issue #42)   ┌─────────────────────────────┐
+  │ Any Target GitHub    ├─────────────────────────────────►│ Cloud Run Gateway Proxy     │
+  │ Repository (`owner/repo`)│                              │ (`/webhooks/github`)        │
+  └──────────────────────┘                                  └──────────────┬──────────────┘
+                                                                           │
+                                                                           │ 2. Pre-populates Structured
+                                                                           │    Session State
+                                                                           ▼
+                                                            ┌─────────────────────────────┐
+                                                            │ ADK Session Service         │
+                                                            │ (`ctx.state`)               │
+                                                            └──────────────┬──────────────┘
+                                                                           │
+                                                                           │ 3. Executes Multi-Agent
+                                                                           │    Workflow
+                                                                           ▼
+                                                            ┌─────────────────────────────┐
+                                                            │ ADK Workflow Runner         │
+                                                            │ - `user_story_refiner`      │
+                                                            │ - `story_critic`            │
+                                                            └─────────────────────────────┘
+```
+
+### Key Architectural Design Principles
+
+1. **Multi-Tenant Repository Agnostic (`search_target_repository`):**
+   * The agent does not rely on local container disk code. When processing a webhook from `acme/web-app`, the agent uses the GitHub Code Search API with a scoped Installation Access Token to search the target repository dynamically over HTTPS.
+2. **Structured Domain State Model (`ctx.state`):**
+   * **`issue`**: Stores target repository metadata (`id`, `title`, `author`, `url`, `repo`).
+   * **`specifications`**: Stores current story drafts (`user_story_markdown`), peer review approval status, and audit history (`critique_history`).
+   * **`comments`**: Captures delta comments across surfaces (GitHub, Slack, Discord).
+3. **Native Google ADK Skills Framework (`SkillToolset`):**
+   * Uses ADK's native `load_skill_from_dir` and `SkillToolset` ([`user-story-best-practices/SKILL.md`](file:///home/mbychkowski/Code/agent-factory/agent_engine/skills/user-story-best-practices/SKILL.md)).
+   * Instructions are loaded on demand via tool calls (`load_skill`), keeping system prompt context overhead extremely low.
+
+---
+
+## 🔄 Multi-Agent Deliberation Workflow
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Human as Human / Stakeholder
-    participant GW as GitHub & Gateway Proxy
-    participant FAC as Deliberation Facilitator
-    participant REF as User Story Refiner (PM)
-    participant SC as Story Critic (Architect)
-    participant DES as Technical Designer (Architect)
-    participant DC as Design Critic (Lead)
-    participant PLN as Task Planner (Lead)
+    participant GW as GitHub App & Gateway Proxy
+    participant REF as User Story Refiner (Product Owner)
+    participant SC as Story Critic (Software Architect)
 
     rect rgb(240, 245, 255)
-        note over Human,SC: Phase 1: User Story Refinement & Gate 1
-        Human->>GW: Raw Requirements / Input
-        GW->>FAC: Trigger Facilitator Gate
-        alt Fresh Spec Creation
-            FAC->>REF: Pass Raw Spec Requirements
-        else Multi-Human Collaboration Turn
-            FAC->>FAC: Triage & Synthesize Delta
-            FAC-->>Human: Direct Response (if Noise / Meta-Q&A)
-            FAC->>REF: Pass Synthesized Delta
+        note over Human,SC: Automated User Story Refinement & Peer Review
+        Human->>GW: Create or Update Issue in Target Repo
+        GW->>REF: Pre-load Session State & Trigger Entry Gate
+        loop Technical Peer Review Loop (Up to 2 Rounds)
+            REF->>SC: Submit Drafted User Story
+            SC-->>REF: Request Revisions (if INVEST or BDD Gaps)
         end
-        loop Peer Review Loop
-            REF->>SC: Submit Draft User Story
-            SC-->>REF: Request Revisions (if Gaps/NFRs Missing)
-        end
-        SC->>GW: Story Approved -> Publish Parent Issue (Milestone 1)
-        GW-->>Human: Prompt for Human Gate 1 Approval
-    end
-
-    rect rgb(245, 250, 240)
-        note over Human,DC: Phase 2: Technical Design RFC & Gate 2
-        Human->>GW: Approve Milestone 1 Issue
-        GW->>DES: Trigger Technical Design Phase
-        loop Peer Review Loop
-            DES->>DC: Submit Draft RFC Technical Design
-            DC-->>DES: Request Revisions (if Unclear Contracts/Gaps)
-        end
-        DC->>GW: RFC Approved -> Publish RFC Comment (Milestone 2)
-        GW-->>Human: Prompt for Human Gate 2 Approval
-    end
-
-    rect rgb(255, 245, 240)
-        note over Human,PLN: Phase 3: Task Breakdown
-        Human->>GW: Approve Milestone 2 RFC
-        GW->>PLN: Trigger Task Planning
-        PLN->>GW: Create Developer Sub-Issues on GitHub
-        GW-->>Human: Final Developer Sub-Tasks Ready
+        SC->>GW: Story Peer-Reviewed & Certified
+        GW->>Human: Update Target Issue Description & Label `agent:completed`
     end
 ```
 
 ---
 
-## 🤖 Specialized Agents
+## 🤖 Specialized Agents & Skills
 
-The system coordinates 6 specialized ADK agents inside `agent_engine/agents`:
+The system coordinates specialized ADK agents inside `agent_engine/agents`:
 
-1. **Deliberation Facilitator Agent** ([`deliberation_facilitator`](file:///home/mbychkowski/Code/agent-factory/agent_engine/agents/deliberation_facilitator/agent.py)):
-   Acts as a shock absorber between human channels (GitHub/Slack) and core spec agents. Triages messages, drops off-topic noise, answers meta-questions, and synthesizes clean spec deltas.
-2. **User Story Refiner Agent** ([`user_story_refiner`](file:///home/mbychkowski/Code/agent-factory/agent_engine/agents/story_refiner/agent.py)):
-   Product Owner persona that refines draft requirements into a Jira/GitLab standardized user story with BDD (Given/When/Then) acceptance criteria.
-3. **Story Critic Agent** ([`story_critic`](file:///home/mbychkowski/Code/agent-factory/agent_engine/agents/critique/story_critic.py)):
-   Software Architect persona that peer-reviews User Story drafts for technical feasibility, NFR completeness, security, and testability before GitHub publishing.
-4. **Technical Designer Agent** ([`technical_designer`](file:///home/mbychkowski/Code/agent-factory/agent_engine/agents/technical_designer/agent.py)):
-   Software Architect persona that drafts the system architecture, database schemas, API contracts, and Mermaid diagrams into an RFC document.
-5. **Design Critic Agent** ([`design_critic`](file:///home/mbychkowski/Code/agent-factory/agent_engine/agents/critique/design_critic.py)):
-   Engineering Lead persona that peer-reviews RFC Technical Designs for actionability, API clarity, and task breakdown readiness before GitHub comment publishing.
-6. **Task Planner Agent** ([`task_planner`](file:///home/mbychkowski/Code/agent-factory/agent_engine/agents/task_planner/agent.py)):
-   Engineering Lead persona that analyzes the approved RFC design and breaks it down into discrete developer sub-issues on GitHub.
+1. **User Story Refiner Agent** ([`user_story_refiner`](file:///home/mbychkowski/Code/agent-factory/agent_engine/agents/story_refiner/agent.py)):
+   Product Owner persona operating in automated single-pass mode. Refines raw inputs into a Jira/GitLab standardized user story with BDD (Given/When/Then) acceptance criteria.
+2. **Story Critic Agent** ([`story_critic`](file:///home/mbychkowski/Code/agent-factory/agent_engine/agents/critique/story_critic.py)):
+   Software Architect persona that peer-reviews User Story drafts against the `user-story-best-practices` skill for technical feasibility, NFR completeness, security, and testability.
+3. **Native ADK SkillToolset** ([`user-story-best-practices`](file:///home/mbychkowski/Code/agent-factory/agent_engine/skills/user-story-best-practices/SKILL.md)):
+   Enterprise quality standard skill defining INVEST criteria, BDD Given/When/Then scenario structures, Non-Functional Requirements (NFR) checklists, and Definition of Done.
 
 ---
 
@@ -86,12 +91,14 @@ The system coordinates 6 specialized ADK agents inside `agent_engine/agents`:
 ```
 agent-factory/
 ├── agent_engine/                   # Service 1: Core ADK Multi-Agent System
-│   ├── agents/                     #   - All 6 specialized ADK agents & prompts
-│   │   ├── deliberation_facilitator/
-│   │   ├── story_refiner/
-│   │   ├── technical_designer/
-│   │   ├── task_planner/
-│   │   └── critique/
+│   ├── agents/                     #   - Specialized ADK agents & prompts
+│   │   ├── story_refiner/          #     • Product Owner agent
+│   │   ├── critique/               #     • Technical Architect critic agent
+│   │   ├── state.py                #     • Structured domain state getters/setters
+│   │   └── tools.py                #     • Multi-tenant GitHub API & search tools
+│   ├── skills/                     #   - Native ADK Skills
+│   │   ├── skills.py               #     • Native SkillToolset loader
+│   │   └── user-story-best-practices/ #  • SKILL.md with YAML frontmatter
 │   ├── app/                        #   - ADK FastAPI app & A2A endpoints
 │   ├── run.py                      #   - Engine runner CLI
 │   ├── Dockerfile                  #   - Agent Runtime container build
@@ -100,7 +107,7 @@ agent-factory/
 ├── gateway/                        # Service 2: Transient Webhook Proxy
 │   ├── app/                        #   - Routes, adapters, services, and schemas
 │   │   ├── adapters/               #   - Surface adapters (GitHub HMAC, etc.)
-│   │   ├── routes/                 #   - POST /webhooks/github & /health
+│   │   ├── routes/                 #   - POST /webhooks/github & /tasks/execute-agent-turn
 │   │   ├── services/               #   - Event publisher (Pub/Sub & direct HTTP)
 │   │   └── utils/                  #   - Security & bot self-loop filtering
 │   ├── Dockerfile                  #   - Dedicated Cloud Run Gateway container build

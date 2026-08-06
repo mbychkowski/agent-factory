@@ -12,19 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
-import base64
 import contextlib
-import json
 import os
 from collections.abc import AsyncIterator
-
-from typing import Any
 
 import google.auth
 from a2a.server.tasks import InMemoryTaskStore
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
 from google.adk.runners import Runner
 from google.cloud import logging as google_cloud_logging
@@ -41,7 +36,11 @@ from agent_engine.app.app_utils.telemetry import (
 from agent_engine.app.app_utils.typing import Feedback
 
 load_dotenv()
+os.environ.setdefault("DEFAULT_LLM_LOCATION", "global")
+os.environ.setdefault("LLM_LOCATION", "global")
+os.environ.setdefault("LOCATION", "global")
 setup_telemetry()
+
 # Must run before get_fast_api_app to set the tracer provider resource.
 setup_agent_engine_telemetry()
 _, project_id = google.auth.default()
@@ -111,57 +110,6 @@ def collect_feedback(feedback: Feedback) -> dict[str, str]:
     """
     logger.log_struct(feedback.model_dump(), severity="INFO")
     return {"status": "success"}
-
-
-@app.post("/pubsub/push")
-async def handle_pubsub_push(request: Request) -> dict[str, Any]:
-    """Pub/Sub Push Endpoint. Decodes incoming Pub/Sub envelope data,
-    extracts the HumanInteractionEvent, and invokes the ADK runner.
-    """
-    try:
-        body = await request.json()
-        message = body.get("message", {})
-        data_b64 = message.get("data")
-        if not data_b64:
-            raise HTTPException(status_code=400, detail="Missing message.data in Pub/Sub push payload")
-
-        raw_payload = json.loads(base64.b64decode(data_b64).decode("utf-8"))
-        logger.log_struct(
-            {
-                "event": "pubsub_push_received",
-                "event_id": raw_payload.get("event_id"),
-                "interaction_type": raw_payload.get("interaction_type"),
-            },
-            severity="INFO",
-        )
-
-        runner: Runner | None = getattr(app.state, "runner", None)
-        if runner:
-            content_text = raw_payload.get("content", "")
-            issue_id = raw_payload.get("issue_id")
-            thread_ref = raw_payload.get("thread_ref") or (f"github:issue:{issue_id}" if issue_id else "github:general")
-
-            from google.genai import types
-            new_message = types.Content(
-                parts=[
-                    types.Part(
-                        text=f"Received GitHub human interaction event ({raw_payload.get('interaction_type')}):\n\n{content_text}"
-                    )
-                ]
-            )
-
-            asyncio.create_task(
-                runner.run_async(
-                    user_id=raw_payload.get("actor", {}).get("user_id", "github_user"),
-                    session_id=thread_ref,
-                    new_message=new_message,
-                )
-            )
-
-        return {"status": "accepted", "event_id": raw_payload.get("event_id")}
-    except Exception as e:
-        logger.log_struct({"event": "pubsub_push_error", "error": str(e)}, severity="ERROR")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Main execution
