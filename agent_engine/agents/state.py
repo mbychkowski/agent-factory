@@ -1,8 +1,9 @@
 from typing import Any, Dict, List, Optional, Union
+
 from google.adk.agents.context import Context
 
 
-def get_issue_id(ctx: Context) -> Optional[int]:
+def get_issue_id(ctx: Context) -> int | None:
     """Retrieves issue ID from structured state or legacy parent_issue_id."""
     issue = ctx.state.get("issue")
     if isinstance(issue, dict) and issue.get("id"):
@@ -15,11 +16,11 @@ def get_issue_id(ctx: Context) -> Optional[int]:
 
 def set_issue_metadata(
     ctx: Context,
-    issue_id: Optional[int] = None,
-    title: Optional[str] = None,
-    author: Optional[str] = None,
-    url: Optional[str] = None,
-    labels: Optional[List[str]] = None,
+    issue_id: int | None = None,
+    title: str | None = None,
+    author: str | None = None,
+    url: str | None = None,
+    labels: list[str] | None = None,
 ) -> None:
     """Populates or updates structured issue metadata in ctx.state."""
     issue = ctx.state.setdefault("issue", {})
@@ -88,8 +89,8 @@ def record_critique_result(
     ctx: Context,
     is_approved: bool,
     critique_notes: str,
-    score: Optional[int] = None,
-    missing_elements: Optional[List[str]] = None,
+    score: int | None = None,
+    missing_elements: list[str] | None = None,
 ) -> None:
     """Records critique history audit record in specifications domain."""
     specs = ctx.state.setdefault("specifications", {})
@@ -108,8 +109,8 @@ def append_comment(
     body: str,
     author: str = "unknown",
     source: str = "github",
-    comment_id: Optional[Union[int, str]] = None,
-    timestamp: Optional[str] = None,
+    comment_id: int | str | None = None,
+    timestamp: str | None = None,
 ) -> None:
     """Appends a comment delta to ctx.state['comments']."""
     comments = ctx.state.setdefault("comments", [])
@@ -122,6 +123,6 @@ def append_comment(
     })
 
 
-def get_comments(ctx: Context) -> List[Dict[str, Any]]:
+def get_comments(ctx: Context) -> list[dict[str, Any]]:
     """Retrieves comments list from ctx.state."""
     return ctx.state.get("comments", [])

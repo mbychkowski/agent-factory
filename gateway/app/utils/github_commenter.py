@@ -1,6 +1,7 @@
+import logging
 import os
 import time
-import logging
+
 import requests
 from google.auth import crypt, jwt
 

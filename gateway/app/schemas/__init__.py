@@ -1,15 +1,15 @@
 from gateway.app.schemas.events import (
-    SurfaceType,
-    InteractionType,
+    GatewayResponse,
     HumanActor,
     HumanInteractionEvent,
-    GatewayResponse,
+    InteractionType,
+    SurfaceType,
 )
 
 __all__ = [
-    "SurfaceType",
-    "InteractionType",
+    "GatewayResponse",
     "HumanActor",
     "HumanInteractionEvent",
-    "GatewayResponse",
+    "InteractionType",
+    "SurfaceType",
 ]

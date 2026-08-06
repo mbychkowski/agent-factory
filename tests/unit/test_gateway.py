@@ -1,14 +1,15 @@
-import hmac
 import hashlib
+import hmac
 import json
 import unittest
 from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
-from gateway.main import app
 from gateway.app.config import config
-from gateway.app.utils.security import verify_github_signature
 from gateway.app.utils.bot_filter import is_bot_event
+from gateway.app.utils.security import verify_github_signature
+from gateway.main import app
 
 
 class TestGatewayModule(unittest.TestCase):
@@ -109,7 +110,7 @@ class TestGatewayModule(unittest.TestCase):
 
     def test_no_duplicate_comment_chunks(self) -> None:
         """Tests that stream events containing both content and output do not duplicate text in task processing."""
-        from unittest.mock import patch, MagicMock, AsyncMock
+        from unittest.mock import AsyncMock, MagicMock, patch
         
         event_with_dups = {
             "content": {"parts": [{"text": "Unique RFC Section"}]},
@@ -149,7 +150,7 @@ class TestGatewayModule(unittest.TestCase):
 
     def test_suppress_duplicate_comment_on_tool_call(self) -> None:
         """Tests that when an agent tool call (add_design_comment) is detected, duplicate comment posting is suppressed."""
-        from unittest.mock import patch, MagicMock, AsyncMock
+        from unittest.mock import AsyncMock, MagicMock, patch
 
         event_with_tool_call = {
             "content": {

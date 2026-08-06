@@ -4,9 +4,9 @@ from .prompt import get_prompt
 from .schemas import CritiqueResult
 
 __all__ = [
-    "story_critic_agent",
-    "root_agent",
+    "CritiqueResult",
     "config",
     "get_prompt",
-    "CritiqueResult",
+    "root_agent",
+    "story_critic_agent",
 ]

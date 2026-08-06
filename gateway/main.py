@@ -1,7 +1,9 @@
 import logging
+
 from fastapi import FastAPI
-from gateway.app.routes.health import router as health_router
+
 from gateway.app.routes.github import router as github_router
+from gateway.app.routes.health import router as health_router
 from gateway.app.routes.tasks import router as tasks_router
 
 logging.basicConfig(level=logging.INFO)

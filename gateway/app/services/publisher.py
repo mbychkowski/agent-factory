@@ -1,5 +1,6 @@
 import json
 import logging
+
 from gateway.app.config import config
 from gateway.app.schemas.events import HumanInteractionEvent
 

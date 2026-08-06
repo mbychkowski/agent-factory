@@ -2,10 +2,11 @@ import json
 import logging
 import uuid
 from typing import Any, Dict
+
 import google.auth
 import google.auth.transport.requests
-from fastapi import APIRouter, HTTPException, Request
 import httpx
+from fastapi import APIRouter, HTTPException, Request
 
 from gateway.app.config import config
 
@@ -75,13 +76,13 @@ def _parse_stream_response(response_text: str) -> tuple[list[str], bool, str]:
 
 
 @router.post("/tasks/execute-agent-turn", status_code=200)
-async def execute_agent_turn(request: Request) -> Dict[str, Any]:
+async def execute_agent_turn(request: Request) -> dict[str, Any]:
     """Cloud Tasks Worker Endpoint. Decodes task payload and invokes the Vertex AI
 
     Reasoning Engine agent via its official REST API.
     """
     try:
-        payload: Dict[str, Any] = await request.json()
+        payload: dict[str, Any] = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
@@ -102,7 +103,7 @@ async def execute_agent_turn(request: Request) -> Dict[str, Any]:
 
     # 1. Obtain Google Cloud Auth Bearer Token
     try:
-        credentials, project = google.auth.default(
+        credentials, _project = google.auth.default(
             scopes=["https://www.googleapis.com/auth/cloud-platform"]
         )
         auth_request = google.auth.transport.requests.Request()

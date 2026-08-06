@@ -1,5 +1,6 @@
 import logging
 from typing import Any, Dict
+
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -27,7 +28,7 @@ async def github_webhook(
         raise HTTPException(status_code=401, detail="Invalid HMAC signature")
 
     try:
-        payload: Dict[str, Any] = await request.json()
+        payload: dict[str, Any] = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
