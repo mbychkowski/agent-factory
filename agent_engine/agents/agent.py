@@ -31,9 +31,20 @@ from google.adk.events.event_actions import EventActions
 from google.adk.workflow import START
 
 
+import re
+
+
 async def gate_entry(node_input: Any, ctx: Context) -> Event:
     """Evaluates incoming human input and routes directly to agent_user_story_refiner."""
     parent_id = get_issue_id(ctx)
+    if not parent_id and node_input:
+        match = re.search(r"Issue #(\d+)", str(node_input))
+        if match:
+            parsed_id = int(match.group(1))
+            from agent_engine.agents.state import set_issue_metadata
+            set_issue_metadata(ctx, issue_id=parsed_id)
+            parent_id = parsed_id
+
     if parent_id:
         try:
             current_phase = "phase:user-story"
@@ -59,14 +70,22 @@ async def gate_evaluate_critic_review(node_input: Any, ctx: Context) -> Event:
     missing_elements = []
 
     try:
-        data = node_input if isinstance(node_input, dict) else json.loads(raw_output)
+        data = node_input if isinstance(node_input, dict) else None
+        if not data and isinstance(raw_output, str):
+            clean_json = raw_output.strip()
+            if "```json" in clean_json:
+                clean_json = clean_json.split("```json")[1].split("```")[0].strip()
+            elif "```" in clean_json:
+                clean_json = clean_json.split("```")[1].split("```")[0].strip()
+            data = json.loads(clean_json)
+
         if isinstance(data, dict):
             is_approved = bool(data.get("is_approved", False))
             score = data.get("score")
             critique_notes = data.get("critique_notes", "")
             missing_elements = data.get("missing_elements", [])
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[Gate Critic Parse Warning] {e}")
 
     review_rounds = get_story_review_rounds(ctx)
     record_critique_result(
