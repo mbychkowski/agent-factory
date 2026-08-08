@@ -26,6 +26,8 @@ async def publish_event(event: HumanInteractionEvent, base_url: str | None = Non
             )
 
             resolved_gateway_url = config.cloud_run_gateway_url or base_url or "http://localhost:8080"
+            if resolved_gateway_url.startswith("http://") and "localhost" not in resolved_gateway_url and "127.0.0.1" not in resolved_gateway_url:
+                resolved_gateway_url = "https://" + resolved_gateway_url[7:]
 
             target_url = f"{resolved_gateway_url.rstrip('/')}/tasks/execute-agent-turn"
             payload_bytes = json.dumps(payload_dict).encode("utf-8")
