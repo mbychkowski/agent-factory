@@ -8,7 +8,10 @@ from agent_engine.agents.config import config
 from .prompt import get_prompt
 
 
-async def save_user_story_callback(ctx: Context) -> None:
+from typing import Any
+
+
+async def save_user_story_callback(ctx: Context, *args: Any, **kwargs: Any) -> None:
     """Callback triggered after user_story_refiner runs to save generated story markdown in state."""
     if ctx.output:
         text = str(ctx.output).strip()
