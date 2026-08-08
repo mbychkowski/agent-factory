@@ -7,7 +7,20 @@ load_dotenv()
 class AgentsConfig:
     @property
     def default_llm(self) -> str:
-        return os.environ.get("DEFAULT_LLM", "gemini-2.5-flash")
+        return os.environ.get("DEFAULT_LLM", "gemini-3.6-flash")
+
+    @property
+    def llm_location(self) -> str:
+        return os.environ.get("LLM_LOCATION", "global")
+
+    @property
+    def model(self):
+        from google.adk.models import Gemini
+
+        return Gemini(
+            model=self.default_llm,
+            client_kwargs={"location": self.llm_location},
+        )
 
     @property
     def github_app_id(self) -> str:

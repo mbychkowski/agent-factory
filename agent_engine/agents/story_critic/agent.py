@@ -8,7 +8,7 @@ from .schemas import CritiqueResult
 
 story_critic_agent = LlmAgent(
     name="story_critic",
-    model=config.default_llm,
+    model=config.model,
     description="Technical Architect reviewing User Story drafts for technical feasibility, NFR completeness, and testability.",
     instruction=get_prompt(),
     tools=[

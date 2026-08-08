@@ -18,7 +18,7 @@ async def save_user_story_callback(ctx: Context) -> None:
 
 user_story_refiner_agent = LlmAgent(
     name="user_story_refiner",
-    model=config.default_llm,
+    model=config.model,
     description="An expert Agile Product Owner agent that refines draft requirements into standardized, actionable user stories.",
     instruction=get_prompt(),
     tools=[
