@@ -17,13 +17,12 @@ router = APIRouter()
 async def github_webhook(
     request: Request,
     x_github_event: str = Header(..., alias="X-GitHub-Event"),
-    x_hub_signature_256: str = Header(None, alias="X-Hub-Signature-256"),
+    x_hub_signature_256: str | None = Header(None, alias="X-Hub-Signature-256"),
 ):
     raw_body = await request.body()
-    headers_dict = dict(request.headers)
 
     # 1. Verify HMAC SHA-256 Signature using GitHubAdapter
-    if not github_adapter.verify_signature(raw_body, headers_dict):
+    if not github_adapter.verify_signature(raw_body, x_hub_signature_256):
         logger.warning("GitHub Webhook: HMAC signature verification failed.")
         raise HTTPException(status_code=401, detail="Invalid HMAC signature")
 
@@ -45,10 +44,10 @@ async def github_webhook(
         )
 
     # 3. Parse & Normalize to Canonical HumanInteractionEvent
-    normalized_event = github_adapter.parse_and_normalize(payload, headers_dict)
+    normalized_event = github_adapter.parse_and_normalize(payload, x_github_event)
 
     # 4. Publish Event
-    success = await publish_event(normalized_event)
+    success = await publish_event(normalized_event, base_url=str(request.base_url))
 
     if success:
         return GatewayResponse(
@@ -58,3 +57,4 @@ async def github_webhook(
         )
     else:
         raise HTTPException(status_code=500, detail="Failed to publish event to message bus.")
+

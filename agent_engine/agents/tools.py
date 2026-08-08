@@ -7,6 +7,9 @@ from google.adk.tools.mcp_tool import McpToolset
 from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
 
 
+from agent_engine.agents.config import config
+
+
 def get_github_mcp_toolset(
     toolsets: str = "issues,repos",
     allowed_tools: list[str] | None = None,
@@ -33,13 +36,10 @@ def get_github_mcp_toolset(
 
 def get_github_installation_token() -> str:
     """Acquires a short-lived GitHub App Installation Access Token."""
-    app_id = os.getenv("GITHUB_APP_ID")
-    installation_id = os.getenv("GITHUB_APP_INSTALLATION_ID")
-    pem_path = os.getenv(
-        "GITHUB_APP_PRIVATE_KEY_PATH",
-        "./agent-factory-spec-deliberator.2026-08-04.private-key.pem",
-    )
-    pem_string = os.getenv("GITHUB_APP_PRIVATE_KEY")
+    app_id = config.github_app_id
+    installation_id = config.github_app_installation_id
+    pem_path = config.github_app_private_key_path
+    pem_string = config.github_app_private_key
 
     private_key_str = ""
     if pem_string:
@@ -98,7 +98,7 @@ def update_github_issue(
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/vnd.github+json",
             }
-            repo = os.getenv("GITHUB_REPO", "mbychkowski/agent-factory")
+            repo = config.github_repo
             if ctx and hasattr(ctx, "state") and isinstance(ctx.state, dict):
                 issue_domain = ctx.state.get("issue")
                 if isinstance(issue_domain, dict) and issue_domain.get("repo"):
@@ -162,7 +162,7 @@ def sync_github_issue_labels(
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/vnd.github+json",
             }
-            repo = os.getenv("GITHUB_REPO", "mbychkowski/agent-factory")
+            repo = config.github_repo
             if ctx and hasattr(ctx, "state") and isinstance(ctx.state, dict):
                 issue_domain = ctx.state.get("issue")
                 if isinstance(issue_domain, dict) and issue_domain.get("repo"):

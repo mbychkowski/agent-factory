@@ -49,6 +49,9 @@ _ADK_AGENT_EXECUTOR_EXTENSION_URI = (
 )
 
 
+from agent_engine.app.config import config
+
+
 def _default_capabilities() -> AgentCapabilities:
     """Returns the default A2A capabilities used by scaffolded projects."""
     return AgentCapabilities(
@@ -63,21 +66,21 @@ def _default_capabilities() -> AgentCapabilities:
 
 
 def _resolve_app_url(app_url: str | None) -> str:
-    """Resolve the public base URL advertised inside the agent card.
+    """Determine the base URL for the A2A agent card endpoint.
 
-    Falls back in order: explicit ``app_url``, the ``APP_URL`` env var, the
-    Agent Runtime ``/api`` passthrough self-built from runtime env vars (valid
+    Uses ``app_url`` if passed, else ``APP_URL`` env, else constructs a Vertex AI
+    Reasoning Engine endpoint if running in Agent Engine (handles startup race
     on the first deploy, before the CLI knows the server-assigned engine ID),
     then a local default.
     """
     if app_url:
         return app_url
-    if env_url := os.getenv("APP_URL"):
+    if env_url := config.app_url:
         return env_url
 
-    agent_engine_id = os.getenv("GOOGLE_CLOUD_AGENT_ENGINE_ID")
-    project = os.getenv("GOOGLE_CLOUD_PROJECT")
-    location = os.getenv("GOOGLE_CLOUD_LOCATION")
+    agent_engine_id = config.google_cloud_agent_engine_id
+    project = config.google_cloud_project
+    location = config.google_cloud_location
     if agent_engine_id and project and location:
         return (
             f"https://{location}-aiplatform.googleapis.com/reasoningEngines/v1"
@@ -109,7 +112,7 @@ async def attach_a2a_routes(
     the card is built asynchronously; repeated calls register duplicate routes.
     """
     resolved_app_url = _resolve_app_url(app_url)
-    resolved_agent_version = agent_version or os.getenv("AGENT_VERSION", "0.1.0")
+    resolved_agent_version = agent_version or config.agent_version
     resolved_capabilities = capabilities or _default_capabilities()
 
     agent_card = await AgentCardBuilder(

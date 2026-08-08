@@ -4,7 +4,7 @@ from agent_engine.skills.skills import user_story_skill_toolset
 from google.adk.agents import LlmAgent
 from google.adk.agents.context import Context
 
-from .config import config
+from agent_engine.agents.config import config
 from .prompt import get_prompt
 
 
@@ -16,7 +16,7 @@ async def save_user_story_callback(ctx: Context) -> None:
             set_user_story(ctx, text)
 
 
-root_agent = LlmAgent(
+user_story_refiner_agent = LlmAgent(
     name="user_story_refiner",
     model=config.default_llm,
     description="An expert Agile Product Owner agent that refines draft requirements into standardized, actionable user stories.",
@@ -30,3 +30,5 @@ root_agent = LlmAgent(
     ],
     after_agent_callback=save_user_story_callback,
 )
+
+root_agent = user_story_refiner_agent

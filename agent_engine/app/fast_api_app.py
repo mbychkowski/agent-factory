@@ -35,10 +35,8 @@ from agent_engine.app.app_utils.telemetry import (
 )
 from agent_engine.app.app_utils.typing import Feedback
 
-load_dotenv()
-os.environ.setdefault("DEFAULT_LLM_LOCATION", "global")
-os.environ.setdefault("LLM_LOCATION", "global")
-os.environ.setdefault("LOCATION", "global")
+from agent_engine.app.config import config
+
 setup_telemetry()
 
 # Must run before get_fast_api_app to set the tracer provider resource.
@@ -46,9 +44,7 @@ setup_agent_engine_telemetry()
 _, project_id = google.auth.default()
 logging_client = google_cloud_logging.Client()
 logger = logging_client.logger(__name__)
-allow_origins = (
-    os.getenv("ALLOW_ORIGINS", "").split(",") if os.getenv("ALLOW_ORIGINS") else None
-)
+allow_origins = config.allow_origins or None
 
 AGENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

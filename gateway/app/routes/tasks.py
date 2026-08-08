@@ -15,66 +15,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-GITHUB_ACTION_TOOLS = {
-    "add_design_comment",
-    "create_github_issue",
-    "update_github_issue",
-    "create_developer_sub_issue",
-}
-
-
-def _parse_stream_response(response_text: str) -> tuple[list[str], bool, str]:
-    """Parses streaming events to extract text chunks, tool call flags, and author."""
-    agent_text_chunks = []
-    tool_calls_detected = False
-    active_author = "spec-deliberator-agent"
-
-    for line in response_text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            event = json.loads(line)
-            if not isinstance(event, dict):
-                continue
-
-            author = event.get("author")
-            if author and author not in ("agile_github_planning_app", "root_workflow"):
-                active_author = author
-
-            parts = []
-            if isinstance(event.get("content"), dict):
-                parts = event["content"].get("parts", [])
-            elif isinstance(event.get("output"), dict):
-                parts = event["output"].get("parts", [])
-
-            extracted_text = None
-            for p in parts:
-                if not isinstance(p, dict):
-                    continue
-
-                fc = p.get("functionCall") or p.get("function_call")
-                if isinstance(fc, dict) and fc.get("name") in GITHUB_ACTION_TOOLS:
-                    tool_calls_detected = True
-
-                text = p.get("text", "").strip()
-                if text and not text.startswith("{"):
-                    extracted_text = text
-
-            if not extracted_text and isinstance(event.get("output"), str):
-                out_str = event["output"].strip()
-                if not out_str.startswith("{"):
-                    extracted_text = out_str
-
-            if extracted_text and (not agent_text_chunks or agent_text_chunks[-1] != extracted_text):
-                agent_text_chunks.append(extracted_text)
-
-        except Exception:
-            pass
-
-    return agent_text_chunks, tool_calls_detected, active_author
-
-
 @router.post("/tasks/execute-agent-turn", status_code=200)
 async def execute_agent_turn(request: Request) -> dict[str, Any]:
     """Cloud Tasks Worker Endpoint. Decodes task payload and invokes the Vertex AI
@@ -115,42 +55,34 @@ async def execute_agent_turn(request: Request) -> dict[str, Any]:
 
     # 2. Construct Vertex AI Reasoning Engine streamQuery URL
     engine_resource = config.reasoning_engine_id
-    url = f"https://us-east1-aiplatform.googleapis.com/v1/{engine_resource}:streamQuery"
+    engine_location = config.reasoning_engine_location
+    url = f"https://{engine_location}-aiplatform.googleapis.com/v1/{engine_resource}:streamQuery"
 
     headers = {
         "Authorization": f"Bearer {bearer_token}",
         "Content-Type": "application/json",
     }
 
-    if issue_id:
-        try:
-            from agent_engine.agents.tools import sync_github_issue_labels
-            sync_github_issue_labels(int(issue_id), status_label="agent:in-progress", phase_label="")
-            logger.info(f"Task Worker: Marked Issue #{issue_id} as agent:in-progress at turn start.")
-        except Exception as label_err:
-            logger.warning(f"Task Worker: Could not set initial in-progress label on Issue #{issue_id}: {label_err}")
+    from gateway.app.schemas.state import AgentSessionState, IssueMetadata
 
     # Ensure session exists with session state in Vertex AI Session Service
-    query_url = f"https://us-east1-aiplatform.googleapis.com/v1/{engine_resource}:query"
+    query_url = f"https://{engine_location}-aiplatform.googleapis.com/v1/{engine_resource}:query"
     parsed_issue_id = int(issue_id) if issue_id else None
+
+    session_state = AgentSessionState(
+        parent_issue_id=parsed_issue_id,
+        issue=IssueMetadata(id=parsed_issue_id) if parsed_issue_id else IssueMetadata(),
+    )
+
     create_session_body = {
         "class_method": "async_create_session",
         "input": {
             "user_id": user_id,
             "session_id": thread_ref,
-            "state": {
-                "parent_issue_id": parsed_issue_id,
-                "issue": {"id": parsed_issue_id} if parsed_issue_id else {},
-                "specifications": {
-                    "user_story_markdown": "",
-                    "story_peer_reviewed": False,
-                    "story_review_rounds": 0,
-                    "critique_history": [],
-                },
-                "comments": [],
-            },
+            "state": session_state.model_dump(),
         },
     }
+
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -159,23 +91,19 @@ async def execute_agent_turn(request: Request) -> dict[str, Any]:
     except Exception as e:
         logger.warning(f"Task Worker: Session creation check warning: {e}")
 
+    from gateway.app.utils.prompts import build_agent_interaction_prompt
+
     raw_payload = payload.get("raw_payload", {})
-    issue_data = raw_payload.get("issue", {}) if isinstance(raw_payload, dict) else {}
-    issue_title = issue_data.get("title", "") if isinstance(issue_data, dict) else ""
-
-    issue_context_str = f"Issue #{issue_id} ({issue_title})" if issue_title else f"Issue #{issue_id}"
-
-    prompt = (
-        f"Received GitHub human interaction event on {issue_context_str} ({interaction_type}):\n\n"
-        f"{content_text}\n\n"
-        f"[Context: Target Issue = {issue_context_str}. Please use add_design_comment or create_developer_sub_issue to update GitHub Issue #{issue_id}.]\n"
-        f"[Instruction: Focus strictly on the topic and requirements of {issue_context_str}. Do NOT mix in requirements from unrelated topics or other issues like authentication or database specs.]"
-        if issue_id
-        else f"Received GitHub interaction event ({interaction_type}):\n\n{content_text}"
+    prompt = build_agent_interaction_prompt(
+        interaction_type=str(interaction_type or "COMMENT"),
+        content_text=content_text,
+        issue_id=parsed_issue_id,
+        raw_payload=raw_payload if isinstance(raw_payload, dict) else {},
     )
 
+
     request_body = {
-        "class_method": "async_stream_query",
+        "class_method": "async_query",
         "input": {
             "user_id": user_id,
             "session_id": thread_ref,
@@ -183,52 +111,29 @@ async def execute_agent_turn(request: Request) -> dict[str, Any]:
         },
     }
 
-    logger.info(f"Task Worker: Calling Reasoning Engine at {url} with prompt:\n{prompt}")
+    logger.info(f"Task Worker: Calling Reasoning Engine at {query_url} with prompt:\n{prompt}")
 
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            async with client.stream("POST", url, json=request_body, headers=headers) as response:
-                if response.status_code not in (200, 201):
-                    error_bytes = await response.aread()
-                    error_msg = error_bytes.decode("utf-8", errors="replace")
-                    logger.error(f"Reasoning Engine returned error status {response.status_code}: {error_msg}")
-                    raise HTTPException(status_code=502, detail=f"Reasoning Engine error: {error_msg}")
+        async with httpx.AsyncClient(timeout=600.0) as client:
+            response = await client.post(query_url, json=request_body, headers=headers)
+            if response.status_code not in (200, 201):
+                logger.error(f"Reasoning Engine returned error status {response.status_code}: {response.text}")
+                raise HTTPException(status_code=502, detail=f"Reasoning Engine error: {response.text}")
 
-                raw_bytes = await response.aread()
-                response_text = raw_bytes.decode("utf-8", errors="replace")
-
+            response_text = response.text
             output_preview = response_text[:1000]
-            logger.info(f"Task Worker: Reasoning Engine output preview ({len(raw_bytes)} bytes):\n{output_preview}")
-
-            agent_text_chunks, tool_calls_detected, active_author = (
-                _parse_stream_response(response_text)
-            )
-
-            raw_comment = ""
-            if not tool_calls_detected and agent_text_chunks:
-                raw_comment = "\n\n".join(agent_text_chunks).strip()
-
-            comment_body = f"commentor: {active_author}\n\n{raw_comment}" if raw_comment else ""
-
-            posted = False
-            if issue_id and comment_body and not tool_calls_detected:
-                from gateway.app.utils.github_commenter import post_agent_github_comment
-                logger.info(f"Task Worker: Posting agent response ({len(comment_body)} bytes) to Issue #{issue_id}...")
-                posted = post_agent_github_comment(int(issue_id), comment_body)
-            elif tool_calls_detected:
-                logger.info(f"Task Worker: Tool call handled GitHub interaction directly. Suppressed duplicate comment post on Issue #{issue_id}.")
-
-            logger.info(f"Task Worker: Successfully executed turn for event {event_id}. Posted comment: {posted}")
+            logger.info(f"Task Worker: Reasoning Engine output preview ({len(response_text)} bytes):\n{output_preview}")
+            logger.info(f"Task Worker: Successfully executed turn for event {event_id}.")
             return {
                 "status": "completed",
                 "event_id": event_id,
                 "session_id": thread_ref,
                 "output_preview": output_preview,
-                "posted_comment": posted,
             }
-
 
     except Exception as e:
         logger.error(f"Task Worker: Failed during Reasoning Engine execution: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
 

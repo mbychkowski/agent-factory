@@ -7,7 +7,7 @@ from gateway.app.schemas.events import HumanInteractionEvent
 logger = logging.getLogger(__name__)
 
 
-async def publish_event(event: HumanInteractionEvent) -> bool:
+async def publish_event(event: HumanInteractionEvent, base_url: str | None = None) -> bool:
     """
     Publishes the normalized HumanInteractionEvent to Cloud Tasks queue in production,
     or falls back to Pub/Sub or local direct HTTP forwarding.
@@ -25,7 +25,9 @@ async def publish_event(event: HumanInteractionEvent) -> bool:
                 config.cloud_tasks_queue_id,
             )
 
-            target_url = f"{config.cloud_run_gateway_url.rstrip('/')}/tasks/execute-agent-turn"
+            resolved_gateway_url = config.cloud_run_gateway_url or base_url or "http://localhost:8080"
+
+            target_url = f"{resolved_gateway_url.rstrip('/')}/tasks/execute-agent-turn"
             payload_bytes = json.dumps(payload_dict).encode("utf-8")
 
             # Unique Task Name for Deduplication
@@ -44,7 +46,7 @@ async def publish_event(event: HumanInteractionEvent) -> bool:
                     "headers": {"Content-Type": "application/json"},
                     "body": payload_bytes,
                     "oidc_token": {
-                        "service_account_email": "885745030124-compute@developer.gserviceaccount.com"
+                        "service_account_email": config.cloud_tasks_service_account
                     },
                 },
             }

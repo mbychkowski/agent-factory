@@ -19,16 +19,15 @@ class GitHubAdapter(BaseSurfaceAdapter):
     and payload normalization for GitHub Issues and Issue Comments.
     """
 
-    def verify_signature(self, raw_body: bytes, headers: dict[str, str]) -> bool:
-        signature_header = headers.get("x-hub-signature-256") or headers.get("X-Hub-Signature-256")
+    def verify_signature(self, raw_body: bytes, signature_header: str | None) -> bool:
         return verify_github_signature(raw_body, signature_header, config.github_webhook_secret)
 
     def is_bot_event(self, payload: dict[str, Any]) -> bool:
         return is_bot_event(payload)
 
-    def parse_and_normalize(self, payload: dict[str, Any], headers: dict[str, str]) -> HumanInteractionEvent:
+    def parse_and_normalize(self, payload: dict[str, Any], event_type: str) -> HumanInteractionEvent:
         event_id = str(uuid.uuid4())
-        github_event_type = headers.get("x-github-event") or headers.get("X-GitHub-Event") or ""
+        github_event_type = event_type or ""
 
         issue_data = payload.get("issue", {})
         comment_data = payload.get("comment", {})
@@ -61,6 +60,7 @@ class GitHubAdapter(BaseSurfaceAdapter):
             content=content,
             raw_payload=payload
         )
+
 
 
 github_adapter = GitHubAdapter()

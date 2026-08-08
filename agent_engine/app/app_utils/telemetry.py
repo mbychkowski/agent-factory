@@ -18,13 +18,16 @@ import os
 logger = logging.getLogger(__name__)
 
 
+from agent_engine.app.config import config
+
+
 def setup_telemetry() -> str | None:
     """Configure GenAI prompt/response logging via OpenTelemetry."""
     # Keep full prompts/responses out of trace span attributes (use GenAI logging instead).
     os.environ.setdefault("ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS", "false")
     os.environ.setdefault("GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY", "true")
 
-    bucket = os.environ.get("LOGS_BUCKET_NAME")
+    bucket = config.logs_bucket_name
     capture_content = os.environ.get(
         "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "NO_CONTENT"
     )
@@ -40,12 +43,12 @@ def setup_telemetry() -> str | None:
         os.environ.setdefault(
             "OTEL_SEMCONV_STABILITY_OPT_IN", "gen_ai_latest_experimental"
         )
-        commit_sha = os.environ.get("COMMIT_SHA", "dev")
+        commit_sha = config.commit_sha
         os.environ.setdefault(
             "OTEL_RESOURCE_ATTRIBUTES",
             f"service.namespace=agent-factory,service.version={commit_sha}",
         )
-        path = os.environ.get("GENAI_TELEMETRY_PATH", "completions")
+        path = config.genai_telemetry_path
         os.environ.setdefault(
             "OTEL_INSTRUMENTATION_GENAI_UPLOAD_BASE_PATH",
             f"gs://{bucket}/{path}",
@@ -65,10 +68,7 @@ def setup_agent_engine_telemetry() -> None:
     provider creation, so this must run before get_fast_api_app to set the tags.
     No-op unless GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY is set.
     """
-    if os.environ.get("GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY", "").lower() not in (
-        "true",
-        "1",
-    ):
+    if not config.enable_telemetry:
         return
 
     import google.auth

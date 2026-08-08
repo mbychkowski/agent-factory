@@ -12,9 +12,6 @@ from agent_engine.agents.agent import root_workflow
 
 
 async def run_workflow(input_path: str, output_path: str):
-    # Load .env file
-    load_dotenv()
-
     # Read the raw requirements
     if not os.path.exists(input_path):
         print(f"Error: Input file '{input_path}' not found.", file=sys.stderr)

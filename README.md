@@ -43,7 +43,7 @@ The Spec Deliberator Agent is built to run as a multi-tenant GitHub App service 
    * **`specifications`**: Stores current story drafts (`user_story_markdown`), peer review approval status, and audit history (`critique_history`).
    * **`comments`**: Captures delta comments across surfaces (GitHub, Slack, Discord).
 3. **Native Google ADK Skills Framework (`SkillToolset`):**
-   * Uses ADK's native `load_skill_from_dir` and `SkillToolset` ([`user-story-best-practices/SKILL.md`](file:///home/mbychkowski/Code/agent-factory/agent_engine/skills/user-story-best-practices/SKILL.md)).
+   * Uses ADK's native `load_skill_from_dir` and `SkillToolset` ([`user-story-best-practices/SKILL.md`](agent_engine/skills/user-story-best-practices/SKILL.md)).
    * Instructions are loaded on demand via tool calls (`load_skill`), keeping system prompt context overhead extremely low.
 
 ---
@@ -77,11 +77,11 @@ sequenceDiagram
 
 The system coordinates specialized ADK agents inside `agent_engine/agents`:
 
-1. **User Story Refiner Agent** ([`user_story_refiner`](file:///home/mbychkowski/Code/agent-factory/agent_engine/agents/story_refiner/agent.py)):
+1. **User Story Refiner Agent** ([`user_story_refiner`](agent_engine/agents/story_refiner/agent.py)):
    Product Owner persona operating in automated single-pass mode. Refines raw inputs into a Jira/GitLab standardized user story with BDD (Given/When/Then) acceptance criteria.
-2. **Story Critic Agent** ([`story_critic`](file:///home/mbychkowski/Code/agent-factory/agent_engine/agents/critique/story_critic.py)):
+2. **Story Critic Agent** ([`story_critic`](agent_engine/agents/critique/story_critic.py)):
    Software Architect persona that peer-reviews User Story drafts against the `user-story-best-practices` skill for technical feasibility, NFR completeness, security, and testability.
-3. **Native ADK SkillToolset** ([`user-story-best-practices`](file:///home/mbychkowski/Code/agent-factory/agent_engine/skills/user-story-best-practices/SKILL.md)):
+3. **Native ADK SkillToolset** ([`user-story-best-practices`](agent_engine/skills/user-story-best-practices/SKILL.md)):
    Enterprise quality standard skill defining INVEST criteria, BDD Given/When/Then scenario structures, Non-Functional Requirements (NFR) checklists, and Definition of Done.
 
 ---
@@ -123,13 +123,35 @@ agent-factory/
 
 Ensure you have `uv` installed. If not, follow instructions at [astral.sh/uv](https://astral.sh/uv).
 
+### 1. Monorepo Workspace Installation (Recommended)
+`uv` automatically manages the root workspace defined in [`pyproject.toml`](pyproject.toml) and synchronizes all dependencies across workspace members ([`agent_engine/`](agent_engine) and [`gateway/`](gateway)):
+
 ```bash
-# 1. Initialize venv & sync dependencies
+# Initialize venv & sync dependencies across all workspace sub-services
 uv venv
 uv sync
 
-# 2. Run unit tests
-uv run python -m unittest discover -s tests/unit
+# Run unit tests across all agents & gateway proxy
+uv run pytest tests/unit
+```
+
+### 2. Standalone / Per-Directory Installation
+If working directly within a specific service directory, you can also install and test within that directory:
+
+```bash
+# Agent Engine Service
+(
+  cd agent_engine
+  set -a && source .env && set +a
+  uv sync
+)
+
+# Gateway Proxy Service
+(
+  cd gateway
+  set -a && source .env && set +a
+  uv sync
+)
 ```
 
 ---
@@ -198,7 +220,7 @@ GITHUB_WEBHOOK_SECRET=my_app_webhook_secret_123
 This guide provides a step-by-step walkthrough for deploying the core Spec Deliberator Multi-Agent Engine to **Gemini Enterprise Agent Runtime** and the transient Webhook Proxy (`gateway/`) to **GCP Cloud Run**.
 
 ### Prerequisites & Assumptions
-* **GCP Project:** `prj-goron-village-dev`
+* **GCP Project:** `your-gcp-project-id`
 * **Region:** `us-east1`
 * **Deployment Target:** Agent Runtime (Vertex AI) + Cloud Run (Gateway Proxy)
 
@@ -206,90 +228,100 @@ This guide provides a step-by-step walkthrough for deploying the core Spec Delib
 
 ### Step 1: Enable Google Cloud APIs
 
-Source your `.env` file first, then run this command in your terminal to enable all required GCP APIs:
+Source environment variables from [`agent_engine/.env`](agent_engine/.env) and run this command in your terminal to enable all required GCP APIs:
 
 ```bash
-# Source environment variables from .env
-set -a && source .env && set +a
-
-gcloud services enable \
-  aiplatform.googleapis.com \
-  cloudbuild.googleapis.com \
-  secretmanager.googleapis.com \
-  run.googleapis.com \
-  pubsub.googleapis.com \
-  artifactregistry.googleapis.com \
-  --project="${GOOGLE_CLOUD_PROJECT}"
+(
+  cd agent_engine
+  set -a && source .env && set +a
+  gcloud services enable \
+    aiplatform.googleapis.com \
+    cloudbuild.googleapis.com \
+    cloudtasks.googleapis.com \
+    secretmanager.googleapis.com \
+    run.googleapis.com \
+    artifactregistry.googleapis.com \
+    --project="${GOOGLE_CLOUD_PROJECT}"
+)
 ```
 
 ---
 
 ### Step 2: Deploy Core Spec Engine to Agent Runtime
 
-Navigate to `agent_engine/` (where `agents-cli-manifest.yaml` and `Dockerfile` are located) and deploy the multi-agent system directly onto **Gemini Enterprise Agent Runtime**:
+Deploy the multi-agent system directly onto **Gemini Enterprise Agent Runtime** from [`agent_engine/`](agent_engine):
 
 ```bash
-cd agent_engine
-
-agents-cli deploy \
-  --project "${GOOGLE_CLOUD_PROJECT}" \
-  --region "${DEFAULT_GOOGLE_CLOUD_LOCATION:-us-east1}" \
-  --no-confirm-project
-
-cd ..
+(
+  cd agent_engine
+  set -a && source .env && set +a
+  agents-cli deploy \
+    --project "${GOOGLE_CLOUD_PROJECT}" \
+    --region "${GOOGLE_CLOUD_LOCATION:-us-east1}" \
+    --no-confirm-project
+)
 ```
 
-> ⏱️ **Note:** Agent Runtime container builds from `agent_engine/Dockerfile` and provisions the engine server-side. This takes **5–8 minutes**. When finished, `agents-cli` writes `agent_engine/deployment_metadata.json` and prints your deployed Agent Runtime resource ID.
+> ⏱️ **Note:** Agent Runtime container builds from [`agent_engine/Dockerfile`](agent_engine/Dockerfile) and provisions the engine server-side. This takes **5–8 minutes**. When finished, `agents-cli` writes [`agent_engine/deployment_metadata.json`](agent_engine/deployment_metadata.json) containing your deployed `remote_agent_runtime_id`.
 
 ---
 
-### Step 3: Create Cloud Pub/Sub Topic, IAM Permissions & Push Subscription
+### Step 3: Create Cloud Tasks Queue & IAM Permissions
 
-1. **Create the messaging topic used by the Gateway to queue human interaction events:**
+1. **Extract the deployed Reasoning Engine resource ID from deployment metadata:**
    ```bash
-   gcloud pubsub topics create github-human-events \
-     --project="${GOOGLE_CLOUD_PROJECT}"
+   export REASONING_ENGINE_ID=$(jq -r '.remote_agent_runtime_id' agent_engine/deployment_metadata.json)
+   echo "Deployed Reasoning Engine ID: ${REASONING_ENGINE_ID}"
    ```
 
-2. **Grant Pub/Sub Publisher permission to the Gateway Cloud Run service account:**
+2. **Create the Cloud Tasks queue used by the Gateway with rate limiting:**
    ```bash
-   PROJECT_NUMBER=$(gcloud projects describe "${GOOGLE_CLOUD_PROJECT}" --format="value(projectNumber)")
-
-   gcloud projects add-iam-policy-binding "${GOOGLE_CLOUD_PROJECT}" \
-     --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-     --role="roles/pubsub.publisher"
+   (
+     cd gateway
+     set -a && source .env && set +a
+     gcloud tasks queues create github-agent-queue \
+       --location="${GOOGLE_CLOUD_LOCATION:-us-east1}" \
+       --max-concurrent-dispatches=5 \
+       --max-dispatches-per-second=2 \
+       --max-attempts=3 \
+       --project="${GOOGLE_CLOUD_PROJECT}"
+   )
    ```
 
-3. **Create a Pub/Sub Push Subscription to forward authenticated events to the Agent Engine:**
+3. **Grant Cloud Tasks Enqueuer role to the Compute default service account:**
    ```bash
-   # Retrieve your Agent Engine API base URL and create push subscription targeting /pubsub/push with OIDC auth
-   AGENT_ENDPOINT="https://${DEFAULT_GOOGLE_CLOUD_LOCATION:-us-east1}-aiplatform.googleapis.com/v1/${AGENT_RUNTIME_ID}/api/pubsub/push"
-
-   gcloud pubsub subscriptions create github-human-events-sub \
-     --topic=github-human-events \
-     --push-endpoint="${AGENT_ENDPOINT}" \
-     --push-auth-service-account="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-     --project="${GOOGLE_CLOUD_PROJECT}"
+   (
+     cd gateway
+     set -a && source .env && set +a
+     PROJECT_NUMBER=$(gcloud projects describe "${GOOGLE_CLOUD_PROJECT}" --format="value(projectNumber)")
+     gcloud projects add-iam-policy-binding "${GOOGLE_CLOUD_PROJECT}" \
+       --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+       --role="roles/cloudtasks.enqueuer"
+   )
    ```
 
 ---
 
 ### Step 4: Deploy Gateway Proxy to Cloud Run
 
-Navigate to `gateway/` (where its `Dockerfile` and service files are located) and deploy the transient proxy to Cloud Run using the sourced environment variables:
+Deploy the transient proxy to Cloud Run from [`gateway/`](gateway) with an extended **15-minute timeout** and configured Cloud Tasks service account:
 
 ```bash
-cd gateway
-
-gcloud run deploy spec-deliberator-gateway \
-  --source . \
-  --set-env-vars GOOGLE_CLOUD_PROJECT="${GOOGLE_CLOUD_PROJECT}",ENABLE_PUBSUB=true,GITHUB_WEBHOOK_SECRET="${GITHUB_WEBHOOK_SECRET}" \
-  --allow-unauthenticated \
-  --region "${DEFAULT_GOOGLE_CLOUD_LOCATION:-us-east1}" \
-  --project "${GOOGLE_CLOUD_PROJECT}"
-
-cd ..
+(
+  cd gateway
+  set -a && source .env && set +a
+  PROJECT_NUMBER=$(gcloud projects describe "${GOOGLE_CLOUD_PROJECT}" --format="value(projectNumber)")
+  gcloud run deploy spec-deliberator-gateway \
+    --source . \
+    --timeout=15m \
+    --concurrency=80 \
+    --set-env-vars GOOGLE_CLOUD_PROJECT="${GOOGLE_CLOUD_PROJECT}",ENABLE_CLOUD_TASKS=true,CLOUD_TASKS_QUEUE_ID=github-agent-queue,CLOUD_TASKS_LOCATION="${GOOGLE_CLOUD_LOCATION:-us-east1}",CLOUD_TASKS_SERVICE_ACCOUNT="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com",GITHUB_WEBHOOK_SECRET="${GITHUB_WEBHOOK_SECRET}",GITHUB_APP_ID="${GITHUB_APP_ID}",GITHUB_APP_INSTALLATION_ID="${GITHUB_APP_INSTALLATION_ID}",GITHUB_REPO="${GITHUB_REPO}",REASONING_ENGINE_ID="${REASONING_ENGINE_ID}" \
+    --allow-unauthenticated \
+    --region "${GOOGLE_CLOUD_LOCATION:-us-east1}" \
+    --project "${GOOGLE_CLOUD_PROJECT}"
+)
 ```
+
 
 ---
 
@@ -297,15 +329,23 @@ cd ..
 
 1. **Retrieve your live Cloud Run Gateway URL:**
    ```bash
-   gcloud run services describe spec-deliberator-gateway \
-     --region "${DEFAULT_GOOGLE_CLOUD_LOCATION:-us-east1}" \
-     --project "${GOOGLE_CLOUD_PROJECT}" \
-     --format 'value(status.url)'
+   (
+     cd gateway
+     set -a && source .env && set +a
+     gcloud run services describe spec-deliberator-gateway \
+       --region "${GOOGLE_CLOUD_LOCATION:-us-east1}" \
+       --project "${GOOGLE_CLOUD_PROJECT}" \
+       --format 'value(status.url)'
+   )
    ```
 
 2. **Verify Gateway Health:**
    ```bash
-   curl $(gcloud run services describe spec-deliberator-gateway --region "${DEFAULT_GOOGLE_CLOUD_LOCATION:-us-east1}" --project "${GOOGLE_CLOUD_PROJECT}" --format 'value(status.url)')/health
+   (
+     cd gateway
+     set -a && source .env && set +a
+     curl $(gcloud run services describe spec-deliberator-gateway --region "${GOOGLE_CLOUD_LOCATION:-us-east1}" --project "${GOOGLE_CLOUD_PROJECT}" --format 'value(status.url)')/health
+   )
    ```
    *Expected response:* `{"status":"healthy","service":"spec-deliberator-gateway"}`
 

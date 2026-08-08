@@ -32,7 +32,7 @@ class GatewayConfig:
 
     @property
     def cloud_run_gateway_url(self) -> str:
-        return os.environ.get("CLOUD_RUN_GATEWAY_URL", "https://spec-deliberator-gateway-mberhmbfsa-ue.a.run.app")
+        return os.environ.get("CLOUD_RUN_GATEWAY_URL", "")
 
     @property
     def reasoning_engine_id(self) -> str:
@@ -42,6 +42,14 @@ class GatewayConfig:
     def reasoning_engine_location(self) -> str:
         return os.environ.get("GOOGLE_CLOUD_LOCATION", os.environ.get("REASONING_ENGINE_LOCATION", "us-east1"))
 
+    @property
+    def cloud_tasks_service_account(self) -> str:
+        return os.environ.get(
+            "CLOUD_TASKS_SERVICE_ACCOUNT",
+            "885745030124-compute@developer.gserviceaccount.com",
+        )
+
 
 config = GatewayConfig()
+
 
