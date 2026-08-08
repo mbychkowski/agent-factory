@@ -103,7 +103,7 @@ async def execute_agent_turn(request: Request) -> dict[str, Any]:
 
 
     request_body = {
-        "class_method": "async_query",
+        "class_method": "async_stream_query",
         "input": {
             "user_id": user_id,
             "session_id": thread_ref,

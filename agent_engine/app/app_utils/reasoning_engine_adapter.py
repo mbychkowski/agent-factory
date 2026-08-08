@@ -24,10 +24,13 @@ packaged Agent Engine.
 
 import inspect
 import json
+import logging
 
 from agent_engine.app.app_utils import services
 from fastapi import FastAPI, HTTPException, Request, encoders, responses
 from vertexai.agent_engines.templates.adk import AdkApp
+
+logger = logging.getLogger(__name__)
 
 
 def attach_reasoning_engine_routes(app: FastAPI) -> None:
@@ -60,6 +63,11 @@ def attach_reasoning_engine_routes(app: FastAPI) -> None:
 
     def resolve_method(class_method: str, *, streaming: bool):
         rt = get_runtime()
+        # Map query/async_query aliases to stream_query/async_stream_query
+        if class_method in ("query", "async_query") and class_method not in sync_methods:
+            class_method = "async_stream_query" if "async_stream_query" in streaming_methods else "stream_query"
+            streaming = True
+
         allowed = streaming_methods if streaming else sync_methods
         if class_method not in allowed:
             raise HTTPException(
@@ -71,26 +79,47 @@ def attach_reasoning_engine_routes(app: FastAPI) -> None:
     @app.post("/api/stream_reasoning_engine")
     async def stream_query(request: Request) -> responses.StreamingResponse:
         body = await request.json()
-        method = resolve_method(body["class_method"], streaming=True)
+        method = resolve_method(body.get("class_method", "stream_query"), streaming=True)
 
         async def generator():
             async for event in method(**(body.get("input") or {})):
-                yield json.dumps(event) + "\n"
+                yield json.dumps(encoders.jsonable_encoder(event)) + "\n"
 
         return responses.StreamingResponse(
             content=generator(), media_type="application/json"
         )
 
     @app.post("/api/reasoning_engine")
-    async def query(request: Request) -> responses.JSONResponse:
+    async def query(request: Request) -> responses.Response:
         body = await request.json()
-        method = resolve_method(body["class_method"], streaming=False)
+        class_method = body.get("class_method", "")
         kwargs = body.get("input") or {}
-        output = (
-            await method(**kwargs)
-            if inspect.iscoroutinefunction(method)
-            else method(**kwargs)
-        )
-        return responses.JSONResponse(
-            content=encoders.jsonable_encoder({"output": output})
-        )
+
+        if class_method in ("query", "async_query", "stream_query", "async_stream_query"):
+            method = resolve_method(class_method, streaming=True)
+            output_events = []
+            async for event in method(**kwargs):
+                output_events.append(event)
+            return responses.JSONResponse(
+                content=encoders.jsonable_encoder({"output": output_events[-1] if output_events else {}})
+            )
+
+        method = resolve_method(class_method, streaming=False)
+        try:
+            output = (
+                await method(**kwargs)
+                if inspect.iscoroutinefunction(method)
+                else method(**kwargs)
+            )
+            return responses.JSONResponse(
+                content=encoders.jsonable_encoder({"output": output})
+            )
+        except Exception as err:
+            err_str = str(err)
+            if "already exists" in err_str or "400" in err_str:
+                logger.info(f"Session initialization notice: {err_str}")
+                return responses.JSONResponse(
+                    content=encoders.jsonable_encoder({"output": {"session_id": kwargs.get("session_id"), "status": "already_exists"}})
+                )
+            raise
+
