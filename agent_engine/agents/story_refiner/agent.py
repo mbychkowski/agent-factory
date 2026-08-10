@@ -22,21 +22,13 @@ def extract_text_from_output(val: Any) -> str:
     return str(val or "").strip()
 
 
-async def save_user_story_callback(
-    ctx: Any = None, callback_context: Any = None, **kwargs: Any
-) -> None:
-    """Callback triggered after user_story_refiner runs to save generated story markdown in state."""
-    active_ctx = callback_context or ctx
-    if not active_ctx:
-        return
+from agent_engine.agents.store import create_agent_state_callback
 
-    output = getattr(active_ctx, "output", None)
-    text = extract_text_from_output(output) if output else ""
-
-    if not text or len(text) <= 20:
-        raise ValueError("user_story_refiner agent produced empty or insufficient story output.")
-
-    set_user_story(active_ctx, text)
+save_user_story_callback = create_agent_state_callback(
+    extractor=extract_text_from_output,
+    updater=lambda text, store: set_user_story(store.ctx, text),
+    required_error_msg="user_story_refiner agent produced empty or insufficient story output.",
+)
 
 
 user_story_refiner_agent = LlmAgent(

@@ -69,12 +69,14 @@ class AgentStore:
 def create_agent_state_callback(
     extractor: Callable[[Any], Any],
     updater: Callable[[Any, AgentStore], None],
+    required_error_msg: str | None = None,
 ) -> Callable[..., Any]:
     """Higher-Order Function that creates a standardized ADK after_agent_callback.
 
     Args:
         extractor: Function that extracts target payload from agent output context.
         updater: Callback function receiving (extracted_payload, store) to mutate state.
+        required_error_msg: Optional error message to raise if extracted payload is empty.
     """
 
     async def callback(ctx: Any = None, callback_context: Any = None, **kwargs: Any) -> None:
@@ -84,21 +86,13 @@ def create_agent_state_callback(
 
         store = AgentStore(active_ctx)
         output = getattr(active_ctx, "output", None)
+        payload = extractor(output) if output else None
 
-        payload = extractor(output)
         if not payload:
-            session = getattr(active_ctx, "session", None) or getattr(
-                getattr(active_ctx, "context", None), "session", None
-            )
-            if session and hasattr(session, "events"):
-                for event in reversed(session.events):
-                    content = getattr(event, "content", None)
-                    cand_payload = extractor(content)
-                    if cand_payload:
-                        payload = cand_payload
-                        break
+            if required_error_msg:
+                raise ValueError(required_error_msg)
+            return
 
-        if payload:
-            updater(payload, store)
+        updater(payload, store)
 
     return callback

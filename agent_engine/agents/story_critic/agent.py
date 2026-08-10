@@ -37,27 +37,24 @@ def extract_critique_data(node_input: Any) -> dict[str, Any] | None:
     return None
 
 
-async def save_critique_callback(
-    ctx: Any = None, callback_context: Any = None, **kwargs: Any
-) -> None:
-    """Callback triggered after story_critic runs to immediately save structured critique into session state."""
-    active_ctx = callback_context or ctx
-    if not active_ctx:
-        return
+from agent_engine.agents.store import create_agent_state_callback, AgentStore
 
-    output = getattr(active_ctx, "output", None)
-    data = extract_critique_data(output)
 
-    if not data or not isinstance(data, dict):
-        raise ValueError("story_critic agent produced invalid or empty critique output.")
-
+def _record_critique_updater(data: dict[str, Any], store: AgentStore) -> None:
     record_critique_result(
-        active_ctx,
+        store.ctx,
         is_approved=bool(data.get("is_approved", False)),
         critique_notes=str(data.get("critique_notes", "")),
         score=data.get("score"),
         missing_elements=data.get("missing_elements", []),
     )
+
+
+save_critique_callback = create_agent_state_callback(
+    extractor=extract_critique_data,
+    updater=_record_critique_updater,
+    required_error_msg="story_critic agent produced invalid or empty critique output.",
+)
 
 
 story_critic_agent = LlmAgent(
