@@ -8,15 +8,13 @@ from agent_engine.agents.state import (
     increment_story_review_rounds,
     is_story_peer_reviewed,
     record_critique_result,
-    set_story_peer_reviewed,
-    set_user_story,
+    set_story_peer_reviewed
 )
 
 # Import Peer Review Critique Agents
 from agent_engine.agents.story_critic import story_critic_agent as agent_story_critic
-from agent_engine.agents.story_critic.agent import extract_critique_data
 
-from agent_engine.agents.store import extract_text_from_output
+from agent_engine.agents.store import extract_adk_payload
 
 # Import Core Spec Agents
 from agent_engine.agents.story_refiner.agent import (
@@ -62,7 +60,7 @@ async def gate_evaluate_critic_review(node_input: Any, ctx: Context) -> Event:
     missing_elements = []
 
     try:
-        data = extract_critique_data(node_input)
+        data = extract_adk_payload(node_input)
         if isinstance(data, dict):
             is_approved = bool(data.get("is_approved", False))
             score = data.get("score")

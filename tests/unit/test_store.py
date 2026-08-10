@@ -41,7 +41,6 @@ class TestAgentStoreFramework(unittest.TestCase):
             store.set("user_story_markdown", payload)
 
         callback = create_agent_state_callback(
-            extractor=dummy_extractor,
             updater=dummy_updater
         )
         asyncio.run(callback(ctx))

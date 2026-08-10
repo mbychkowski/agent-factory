@@ -4,7 +4,7 @@ from google.adk.agents import LlmAgent
 
 from agent_engine.agents.config import config
 from agent_engine.agents.state import set_user_story
-from agent_engine.agents.store import create_agent_state_callback, extract_text_from_output
+from agent_engine.agents.store import create_agent_state_callback
 from agent_engine.agents.tools import get_github_mcp_toolset
 from agent_engine.skills.skills import user_story_skill_toolset
 

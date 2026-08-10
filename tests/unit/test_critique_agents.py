@@ -3,8 +3,9 @@ from unittest.mock import MagicMock
 
 from google.adk.agents.context import Context
 
+from agent_engine.agents.store import extract_adk_payload
 from agent_engine.agents.story_critic import CritiqueResult, story_critic_agent
-from agent_engine.agents.story_critic.agent import extract_critique_data, save_critique_callback
+from agent_engine.agents.story_critic.agent import save_critique_callback
 
 
 class TestCritiqueAgents(unittest.TestCase):
@@ -32,14 +33,14 @@ class TestCritiqueAgents(unittest.TestCase):
             critique_notes="Excellent user story.",
             missing_elements=[]
         )
-        extracted = extract_critique_data(res)
+        extracted = extract_adk_payload(res)
         self.assertIsNotNone(extracted)
         self.assertTrue(extracted["is_approved"])
         self.assertEqual(extracted["score"], 9)
 
     def test_extract_critique_data_json_string(self) -> None:
         json_str = '```json\n{"is_approved": false, "score": 5, "critique_notes": "Needs work.", "missing_elements": ["NFR"]}\n```'
-        extracted = extract_critique_data(json_str)
+        extracted = extract_adk_payload(json_str)
         self.assertIsNotNone(extracted)
         self.assertFalse(extracted["is_approved"])
         self.assertEqual(extracted["score"], 5)

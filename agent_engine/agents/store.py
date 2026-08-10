@@ -1,23 +1,63 @@
 """Lightweight Session State Helper & Callback Framework for ADK Agents.
 
-Provides clean dot-notation access to ctx.state, built-in text extraction,
+Provides clean dot-notation access to ctx.state, unified ADK output extraction,
 and higher-order callbacks without unnecessary boilerplate.
 """
 
+import json
 from typing import Any, Callable, TypeVar
+from unittest.mock import MagicMock, Mock
 
 T = TypeVar("T")
 
 
-def extract_text_from_output(val: Any) -> str:
-    """Extracts text from string, Part, Content, or Event objects."""
-    if isinstance(val, str):
-        return val.strip()
-    if hasattr(val, "content") and val.content:
-        return extract_text_from_output(val.content)
-    if hasattr(val, "parts") and val.parts:
-        return "\n".join(str(p.text) for p in val.parts if getattr(p, "text", None)).strip()
-    return str(val or "").strip()
+def extract_adk_payload(output: Any) -> Any:
+    """Unified ADK Output Extractor: Automatically handles Pydantic models, dicts, or text Content."""
+    if output is None:
+        return None
+
+    # Handle Pydantic models (excluding MagicMock in unit tests)
+    if not isinstance(output, (Mock, MagicMock)):
+        if hasattr(output, "model_dump"):
+            try:
+                return output.model_dump()
+            except Exception:
+                pass
+        if hasattr(output, "dict"):
+            try:
+                return output.dict()
+            except Exception:
+                pass
+
+    if isinstance(output, dict):
+        return output
+
+    if isinstance(output, str):
+        clean = output.strip()
+        if "```json" in clean:
+            clean = clean.split("```json")[1].split("```")[0].strip()
+        elif "```" in clean:
+            clean = clean.split("```")[1].split("```")[0].strip()
+        if clean.startswith("{") and clean.endswith("}"):
+            try:
+                res = json.loads(clean)
+                if isinstance(res, dict):
+                    return res
+            except Exception:
+                pass
+        return output.strip()
+
+    if hasattr(output, "content") and output.content:
+        return extract_adk_payload(output.content)
+
+    if hasattr(output, "parts") and output.parts:
+        return "\n".join(str(p.text) for p in output.parts if getattr(p, "text", None)).strip()
+
+    return str(output).strip()
+
+
+# Backwards compatibility alias
+extract_text_from_output = extract_adk_payload
 
 
 class AgentStore:
@@ -79,7 +119,6 @@ class AgentStore:
 
 def create_agent_state_callback(
     target_path: str | None = None,
-    extractor: Callable[[Any], Any] = extract_text_from_output,
     updater: Callable[[Any, AgentStore], None] | None = None,
     required_error_msg: str | None = None,
 ) -> Callable[..., Any]:
@@ -87,7 +126,6 @@ def create_agent_state_callback(
 
     Args:
         target_path: Optional state dot-notation path to save extracted payload automatically.
-        extractor: Function that extracts target payload (defaults to extract_text_from_output).
         updater: Optional custom callback function receiving (extracted_payload, store).
         required_error_msg: Optional error message to raise if extracted payload is empty.
     """
@@ -99,7 +137,7 @@ def create_agent_state_callback(
 
         store = AgentStore(active_ctx)
         output = getattr(active_ctx, "output", None)
-        payload = extractor(output) if output else None
+        payload = extract_adk_payload(output) if output else None
 
         if not payload or (isinstance(payload, str) and len(payload.strip()) <= 20 and required_error_msg):
             if required_error_msg:
