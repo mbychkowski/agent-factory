@@ -1,5 +1,4 @@
 import asyncio
-import json
 from typing import Any
 
 from agent_engine.agents.state import (
@@ -10,13 +9,16 @@ from agent_engine.agents.state import (
     is_story_peer_reviewed,
     record_critique_result,
     set_story_peer_reviewed,
+    set_user_story,
 )
 
 # Import Peer Review Critique Agents
 from agent_engine.agents.story_critic import story_critic_agent as agent_story_critic
+from agent_engine.agents.story_critic.agent import extract_critique_data
 
 # Import Core Spec Agents
 from agent_engine.agents.story_refiner.agent import (
+    extract_text_from_output,
     root_agent as agent_user_story_refiner,
 )
 
@@ -31,19 +33,9 @@ from google.adk.events.event_actions import EventActions
 from google.adk.workflow import START
 
 
-import re
-
-
 async def gate_entry(node_input: Any, ctx: Context) -> Event:
     """Evaluates incoming human input and routes directly to agent_user_story_refiner."""
     parent_id = get_issue_id(ctx)
-    if not parent_id and node_input:
-        match = re.search(r"Issue #(\d+)", str(node_input))
-        if match:
-            parsed_id = int(match.group(1))
-            from agent_engine.agents.state import set_issue_metadata
-            set_issue_metadata(ctx, issue_id=parsed_id)
-            parent_id = parsed_id
 
     if parent_id:
         try:
@@ -63,26 +55,17 @@ async def gate_evaluate_critic_review(node_input: Any, ctx: Context) -> Event:
 
     If rejected, sends critique back to agent_user_story_refiner for revision (up to 3 rounds).
     """
-    raw_output = node_input if isinstance(node_input, str) else str(node_input)
     is_approved = False
     score = None
     critique_notes = ""
     missing_elements = []
 
     try:
-        data = node_input if isinstance(node_input, dict) else None
-        if not data and isinstance(raw_output, str):
-            clean_json = raw_output.strip()
-            if "```json" in clean_json:
-                clean_json = clean_json.split("```json")[1].split("```")[0].strip()
-            elif "```" in clean_json:
-                clean_json = clean_json.split("```")[1].split("```")[0].strip()
-            data = json.loads(clean_json)
-
+        data = extract_critique_data(node_input)
         if isinstance(data, dict):
             is_approved = bool(data.get("is_approved", False))
             score = data.get("score")
-            critique_notes = data.get("critique_notes", "")
+            critique_notes = str(data.get("critique_notes", ""))
             missing_elements = data.get("missing_elements", [])
     except Exception as e:
         print(f"[Gate Critic Parse Warning] {e}")
@@ -126,43 +109,38 @@ async def gate_evaluate_critic_review(node_input: Any, ctx: Context) -> Event:
 
 async def gate_publish_user_story(ctx: Context) -> Event:
     """Updates main issue description on GitHub and marks status as completed or needs-human-lgtm."""
-    print("Cooling down for 4 seconds to manage API rate limits...")
     await asyncio.sleep(4)
 
     parent_id = get_issue_id(ctx)
+    if not parent_id:
+        print("Gate Evaluating: Parent Issue ID not found. Finishing turn.")
+        return Event()
+
     user_story = get_user_story(ctx)
+    if not user_story:
+        raise ValueError("User Story content missing from session state when attempting to publish to GitHub.")
 
-    if parent_id and user_story:
-        try:
-            update_github_issue(issue_id=int(parent_id), body=user_story, ctx=ctx)
-            print(
-                f"[Story Refiner Gate] Automatically updated main GitHub Issue #{parent_id} description with certified User Story."
-            )
-        except Exception as e:
-            print(
-                f"[Story Refiner Gate Warning] Could not auto-update issue #{parent_id}: {e}"
-            )
-
-        # Label status: 'agent:completed' if approved by architect critic, else 'agent:needs-human-lgtm'
-        status_label = (
-            "agent:completed"
-            if is_story_peer_reviewed(ctx)
-            else "agent:needs-human-lgtm"
+    try:
+        update_github_issue(issue_id=int(parent_id), body=user_story, ctx=ctx)
+        print(
+            f"[Story Refiner Gate] Automatically updated main GitHub Issue #{parent_id} description with certified User Story."
         )
+    except Exception as e:
+        print(f"[Story Refiner Gate Warning] Could not auto-update issue #{parent_id}: {e}")
 
-        try:
-            sync_github_issue_labels(
-                int(parent_id), status_label, "phase:user-story", ctx=ctx
-            )
-        except Exception as e:
-            print(f"[Story Refiner Gate Label Sync Warning] {e}")
+    # Label status: 'agent:completed' if approved by architect critic, else 'agent:needs-human-lgtm'
+    status_label = (
+        "agent:completed"
+        if is_story_peer_reviewed(ctx)
+        else "agent:needs-human-lgtm"
+    )
 
-        return Event(
-            output=f"User Story Issue #{parent_id} refined (status='{status_label}')."
-        )
+    try:
+        sync_github_issue_labels(int(parent_id), status_label, "phase:user-story", ctx=ctx)
+    except Exception as e:
+        print(f"[Story Refiner Gate Label Sync Warning] {e}")
 
-    print("Gate Evaluating: Parent Issue ID not found or story empty. Finishing turn.")
-    return Event()
+    return Event(output=f"User Story Issue #{parent_id} refined (status='{status_label}').")
 
 
 root_workflow = Workflow(

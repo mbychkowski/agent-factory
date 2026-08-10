@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 class IssueMetadata(BaseModel):
     id: int | None = Field(default=None, description="GitHub Issue ID")
+    repo: str | None = Field(default=None, description="GitHub repository full name (owner/repo)")
     title: str | None = Field(default=None, description="GitHub Issue title")
     author: str | None = Field(default=None, description="Author handle")
     url: str | None = Field(default=None, description="HTML URL")
@@ -17,16 +18,7 @@ class SpecificationsState(BaseModel):
     critique_history: list[dict[str, Any]] = Field(default_factory=list, description="Critique audit log")
 
 
-class CommentItem(BaseModel):
-    comment_id: int | str | None = Field(default=None, description="Comment ID")
-    source: str = Field(default="github", description="Source surface")
-    author: str = Field(default="unknown", description="Author handle")
-    body: str = Field(default="", description="Comment body")
-    timestamp: str | None = Field(default=None, description="ISO timestamp")
-
-
 class AgentSessionState(BaseModel):
     parent_issue_id: int | None = Field(default=None, description="Target issue ID")
     issue: IssueMetadata = Field(default_factory=IssueMetadata, description="Issue metadata")
     specifications: SpecificationsState = Field(default_factory=SpecificationsState, description="Specifications state domain")
-    comments: list[CommentItem] = Field(default_factory=list, description="Comments audit history")

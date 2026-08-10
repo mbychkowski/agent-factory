@@ -11,15 +11,32 @@ from .prompt import get_prompt
 from typing import Any
 
 
+def extract_text_from_output(val: Any) -> str:
+    """Extracts text from string, Part, Content, or Event objects."""
+    if isinstance(val, str):
+        return val.strip()
+    if hasattr(val, "content") and val.content:
+        return extract_text_from_output(val.content)
+    if hasattr(val, "parts") and val.parts:
+        return "\n".join(str(p.text) for p in val.parts if getattr(p, "text", None)).strip()
+    return str(val or "").strip()
+
+
 async def save_user_story_callback(
     ctx: Any = None, callback_context: Any = None, **kwargs: Any
 ) -> None:
     """Callback triggered after user_story_refiner runs to save generated story markdown in state."""
     active_ctx = callback_context or ctx
-    if active_ctx and getattr(active_ctx, "output", None):
-        text = str(active_ctx.output).strip()
-        if len(text) > 20:
-            set_user_story(active_ctx, text)
+    if not active_ctx:
+        return
+
+    output = getattr(active_ctx, "output", None)
+    text = extract_text_from_output(output) if output else ""
+
+    if not text or len(text) <= 20:
+        raise ValueError("user_story_refiner agent produced empty or insufficient story output.")
+
+    set_user_story(active_ctx, text)
 
 
 user_story_refiner_agent = LlmAgent(

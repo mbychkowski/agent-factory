@@ -32,6 +32,19 @@ class TestWorkflowGates(unittest.TestCase):
         asyncio_run(save_user_story_callback(ctx))
         self.assertEqual(ctx.state["specifications"]["user_story_markdown"], raw_story_text)
 
+    def test_save_user_story_callback_with_event_object(self) -> None:
+        ctx = MagicMock(spec=Context)
+        ctx.state = {}
+        mock_event = MagicMock()
+        mock_event.content = "As a product owner, I want tests so that code coverage is high."
+        ctx.output = mock_event
+
+        asyncio_run(save_user_story_callback(ctx))
+        self.assertEqual(
+            ctx.state["specifications"]["user_story_markdown"],
+            "As a product owner, I want tests so that code coverage is high.",
+        )
+
 
 def asyncio_run(coro):
     import asyncio

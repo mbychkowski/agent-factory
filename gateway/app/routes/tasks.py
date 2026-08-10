@@ -68,10 +68,13 @@ async def execute_agent_turn(request: Request) -> dict[str, Any]:
     # Ensure session exists with session state in Vertex AI Session Service
     query_url = f"https://{engine_location}-aiplatform.googleapis.com/v1/{engine_resource}:query"
     parsed_issue_id = int(issue_id) if issue_id else None
+    raw_payload = payload.get("raw_payload", {})
+    raw_payload_dict = raw_payload if isinstance(raw_payload, dict) else {}
+    repo_full_name = raw_payload_dict.get("repository", {}).get("full_name") if isinstance(raw_payload_dict.get("repository"), dict) else None
 
     session_state = AgentSessionState(
         parent_issue_id=parsed_issue_id,
-        issue=IssueMetadata(id=parsed_issue_id) if parsed_issue_id else IssueMetadata(),
+        issue=IssueMetadata(id=parsed_issue_id, repo=repo_full_name) if parsed_issue_id else IssueMetadata(repo=repo_full_name),
     )
 
     create_session_body = {

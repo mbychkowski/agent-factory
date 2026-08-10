@@ -125,6 +125,8 @@ def update_github_issue(
                 print(f"[Tool: GitHub Update Error] ({resp.status_code}): {resp.text}")
         except Exception as e:
             print(f"[Tool: GitHub Update Error] {e}")
+    else:
+        print("[Tool: GitHub Warning] No GitHub installation token available (check GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY). Skipping live API update.")
 
     return {"id": issue_id, "status": "simulated_update"}
 

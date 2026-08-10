@@ -1,128 +1,125 @@
-from typing import Any, Dict, List, Optional, Union
+"""Domain State Access API for Spec Deliberator Agent.
 
-from google.adk.agents.context import Context
+Provides semantic domain helper functions backed by AgentStore.
+"""
+
+from typing import Any
+
+from agent_engine.agents.store import AgentStore
 
 
-def get_issue_id(ctx: Context) -> int | None:
+def get_issue_id(ctx: Any) -> int | None:
     """Retrieves issue ID from structured state or legacy parent_issue_id."""
-    issue = ctx.state.get("issue")
-    if isinstance(issue, dict) and issue.get("id"):
-        return int(issue["id"])
-    parent_id = ctx.state.get("parent_issue_id")
+    store = AgentStore(ctx)
+    issue_id = store.get("issue.id")
+    if issue_id is not None:
+        return int(issue_id)
+    parent_id = store.get("parent_issue_id")
     if parent_id is not None:
         return int(parent_id)
     return None
 
 
 def set_issue_metadata(
-    ctx: Context,
+    ctx: Any,
     issue_id: int | None = None,
     title: str | None = None,
     author: str | None = None,
     url: str | None = None,
     labels: list[str] | None = None,
 ) -> None:
-    """Populates or updates structured issue metadata in ctx.state."""
-    issue = ctx.state.setdefault("issue", {})
+    """Populates or updates structured issue metadata in session state."""
+    store = AgentStore(ctx)
     if issue_id is not None:
-        issue["id"] = issue_id
-        ctx.state["parent_issue_id"] = issue_id
+        store.set("issue.id", issue_id)
+        store.set("parent_issue_id", issue_id)
     if title is not None:
-        issue["title"] = title
+        store.set("issue.title", title)
     if author is not None:
-        issue["author"] = author
+        store.set("issue.author", author)
     if url is not None:
-        issue["url"] = url
+        store.set("issue.url", url)
     if labels is not None:
-        issue["labels"] = labels
+        store.set("issue.labels", labels)
 
 
-def get_user_story(ctx: Context) -> str:
+def get_user_story(ctx: Any) -> str:
     """Retrieves generated user story markdown from specifications domain or root."""
-    specs = ctx.state.get("specifications")
-    if isinstance(specs, dict) and specs.get("user_story_markdown"):
-        return specs["user_story_markdown"]
-    return ctx.state.get("user_story_markdown", "")
+    store = AgentStore(ctx)
+    story = store.get("specifications.user_story_markdown")
+    if story:
+        return str(story)
+    return str(store.get("user_story_markdown", ""))
 
 
-def set_user_story(ctx: Context, markdown: str) -> None:
-    """Sets generated user story markdown in both specifications domain and root for compatibility."""
-    specs = ctx.state.setdefault("specifications", {})
-    specs["user_story_markdown"] = markdown
-    ctx.state["user_story_markdown"] = markdown
+def set_user_story(ctx: Any, markdown: str) -> None:
+    """Sets generated user story markdown in both specifications domain and root."""
+    store = AgentStore(ctx)
+    store.set("specifications.user_story_markdown", markdown)
+    store.set("user_story_markdown", markdown)
 
 
-def is_story_peer_reviewed(ctx: Context) -> bool:
+def is_story_peer_reviewed(ctx: Any) -> bool:
     """Checks if user story has passed peer review."""
-    specs = ctx.state.get("specifications")
-    if isinstance(specs, dict) and "story_peer_reviewed" in specs:
-        return bool(specs["story_peer_reviewed"])
-    return bool(ctx.state.get("story_peer_reviewed", False))
+    store = AgentStore(ctx)
+    reviewed = store.get("specifications.story_peer_reviewed")
+    if reviewed is not None:
+        return bool(reviewed)
+    return bool(store.get("story_peer_reviewed", False))
 
 
-def set_story_peer_reviewed(ctx: Context, reviewed: bool) -> None:
+def set_story_peer_reviewed(ctx: Any, reviewed: bool) -> None:
     """Sets story peer review status."""
-    specs = ctx.state.setdefault("specifications", {})
-    specs["story_peer_reviewed"] = reviewed
-    ctx.state["story_peer_reviewed"] = reviewed
+    store = AgentStore(ctx)
+    store.set("specifications.story_peer_reviewed", reviewed)
+    store.set("story_peer_reviewed", reviewed)
 
 
-def get_story_review_rounds(ctx: Context) -> int:
+def get_story_review_rounds(ctx: Any) -> int:
     """Retrieves story review round count."""
-    specs = ctx.state.get("specifications")
-    if isinstance(specs, dict) and "story_review_rounds" in specs:
-        return int(specs["story_review_rounds"])
-    return int(ctx.state.get("story_review_rounds", 0))
+    store = AgentStore(ctx)
+    rounds = store.get("specifications.story_review_rounds")
+    if rounds is not None:
+        return int(rounds)
+    return int(store.get("story_review_rounds", 0))
 
 
-def increment_story_review_rounds(ctx: Context) -> int:
+def increment_story_review_rounds(ctx: Any) -> int:
     """Increments review round count by 1 and returns new count."""
     current = get_story_review_rounds(ctx)
     new_count = current + 1
-    specs = ctx.state.setdefault("specifications", {})
-    specs["story_review_rounds"] = new_count
-    ctx.state["story_review_rounds"] = new_count
+    store = AgentStore(ctx)
+    store.set("specifications.story_review_rounds", new_count)
+    store.set("story_review_rounds", new_count)
     return new_count
 
 
 def record_critique_result(
-    ctx: Context,
+    ctx: Any,
     is_approved: bool,
     critique_notes: str,
     score: int | None = None,
     missing_elements: list[str] | None = None,
 ) -> None:
-    """Records critique history audit record in specifications domain."""
-    specs = ctx.state.setdefault("specifications", {})
+    """Records critique history audit record in specifications domain and root state."""
+    store = AgentStore(ctx)
+    rounds = get_story_review_rounds(ctx)
+    specs = store.raw_state.setdefault("specifications", {})
     history = specs.setdefault("critique_history", [])
-    history.append({
-        "round": get_story_review_rounds(ctx),
+
+    entry = {
+        "round": rounds,
         "is_approved": is_approved,
         "score": score,
         "notes": critique_notes,
         "missing_elements": missing_elements or [],
-    })
+    }
+    history.append(entry)
 
+    root_history = store.raw_state.setdefault("critique_history", [])
+    root_history.append(entry)
 
-def append_comment(
-    ctx: Context,
-    body: str,
-    author: str = "unknown",
-    source: str = "github",
-    comment_id: int | str | None = None,
-    timestamp: str | None = None,
-) -> None:
-    """Appends a comment delta to ctx.state['comments']."""
-    comments = ctx.state.setdefault("comments", [])
-    comments.append({
-        "comment_id": comment_id,
-        "source": source,
-        "author": author,
-        "body": body,
-        "timestamp": timestamp,
-    })
-
-
-def get_comments(ctx: Context) -> list[dict[str, Any]]:
-    """Retrieves comments list from ctx.state."""
-    return ctx.state.get("comments", [])
+    store.set("specifications.story_peer_reviewed", is_approved)
+    store.set("latest_critique_notes", critique_notes)
+    store.set("latest_critique_score", score)
+    store.set("is_story_approved", is_approved)
