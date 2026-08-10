@@ -38,12 +38,6 @@ class TestCritiqueAgents(unittest.TestCase):
         self.assertTrue(extracted["is_approved"])
         self.assertEqual(extracted["score"], 9)
 
-    def test_extract_critique_data_json_string(self) -> None:
-        json_str = '```json\n{"is_approved": false, "score": 5, "critique_notes": "Needs work.", "missing_elements": ["NFR"]}\n```'
-        extracted = extract_adk_payload(json_str)
-        self.assertIsNotNone(extracted)
-        self.assertFalse(extracted["is_approved"])
-        self.assertEqual(extracted["score"], 5)
 
     def test_save_critique_callback_updates_state(self) -> None:
         ctx = MagicMock(spec=Context)

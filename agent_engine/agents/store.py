@@ -1,10 +1,9 @@
 """Lightweight Session State Helper & Callback Framework for ADK Agents.
 
-Provides clean dot-notation access to ctx.state, unified ADK output extraction,
+Provides clean dot-notation access to ctx.state, simple ADK output extraction,
 and higher-order callbacks without unnecessary boilerplate.
 """
 
-import json
 from typing import Any, Callable, TypeVar
 from unittest.mock import MagicMock, Mock
 
@@ -12,47 +11,17 @@ T = TypeVar("T")
 
 
 def extract_adk_payload(output: Any) -> Any:
-    """Unified ADK Output Extractor: Automatically handles Pydantic models, dicts, or text Content."""
+    """Extracts state payload from ADK context output."""
     if output is None:
         return None
-
-    # Handle Pydantic models (excluding MagicMock in unit tests)
-    if not isinstance(output, (Mock, MagicMock)):
-        if hasattr(output, "model_dump"):
-            try:
-                return output.model_dump()
-            except Exception:
-                pass
-        if hasattr(output, "dict"):
-            try:
-                return output.dict()
-            except Exception:
-                pass
-
-    if isinstance(output, dict):
-        return output
-
+    if not isinstance(output, (Mock, MagicMock)) and hasattr(output, "model_dump"):
+        return output.model_dump()
     if isinstance(output, str):
-        clean = output.strip()
-        if "```json" in clean:
-            clean = clean.split("```json")[1].split("```")[0].strip()
-        elif "```" in clean:
-            clean = clean.split("```")[1].split("```")[0].strip()
-        if clean.startswith("{") and clean.endswith("}"):
-            try:
-                res = json.loads(clean)
-                if isinstance(res, dict):
-                    return res
-            except Exception:
-                pass
         return output.strip()
-
-    if hasattr(output, "content") and output.content:
-        return extract_adk_payload(output.content)
-
+    if hasattr(output, "content") and output.content and isinstance(output.content, str):
+        return output.content.strip()
     if hasattr(output, "parts") and output.parts:
         return "\n".join(str(p.text) for p in output.parts if getattr(p, "text", None)).strip()
-
     return str(output).strip()
 
 
