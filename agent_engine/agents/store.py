@@ -95,7 +95,7 @@ def create_agent_state_callback(
         required_error_msg: Optional error message to raise if extracted payload is empty.
     """
 
-    async def callback(ctx: Any = None, callback_context: Any = None, **kwargs: Any) -> None:
+    async def callback(callback_context: Any = None, ctx: Any = None, **kwargs: Any) -> None:
         active_ctx = callback_context or ctx
         if not active_ctx:
             return
