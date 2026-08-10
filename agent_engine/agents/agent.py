@@ -16,9 +16,10 @@ from agent_engine.agents.state import (
 from agent_engine.agents.story_critic import story_critic_agent as agent_story_critic
 from agent_engine.agents.story_critic.agent import extract_critique_data
 
+from agent_engine.agents.store import extract_text_from_output
+
 # Import Core Spec Agents
 from agent_engine.agents.story_refiner.agent import (
-    extract_text_from_output,
     root_agent as agent_user_story_refiner,
 )
 

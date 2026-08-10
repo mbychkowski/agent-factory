@@ -1,31 +1,17 @@
-from agent_engine.agents.state import set_user_story
-from agent_engine.agents.tools import get_github_mcp_toolset
-from agent_engine.skills.skills import user_story_skill_toolset
-from google.adk.agents import LlmAgent
-from google.adk.agents.context import Context
-
-from agent_engine.agents.config import config
-from .prompt import get_prompt
-
-
 from typing import Any
 
+from google.adk.agents import LlmAgent
 
-def extract_text_from_output(val: Any) -> str:
-    """Extracts text from string, Part, Content, or Event objects."""
-    if isinstance(val, str):
-        return val.strip()
-    if hasattr(val, "content") and val.content:
-        return extract_text_from_output(val.content)
-    if hasattr(val, "parts") and val.parts:
-        return "\n".join(str(p.text) for p in val.parts if getattr(p, "text", None)).strip()
-    return str(val or "").strip()
+from agent_engine.agents.config import config
+from agent_engine.agents.state import set_user_story
+from agent_engine.agents.store import create_agent_state_callback, extract_text_from_output
+from agent_engine.agents.tools import get_github_mcp_toolset
+from agent_engine.skills.skills import user_story_skill_toolset
 
-
-from agent_engine.agents.store import create_agent_state_callback
+from .prompt import get_prompt
 
 save_user_story_callback = create_agent_state_callback(
-    extractor=extract_text_from_output,
+    target_path="specifications.user_story_markdown",
     updater=lambda text, store: set_user_story(store.ctx, text),
     required_error_msg="user_story_refiner agent produced empty or insufficient story output.",
 )

@@ -1,12 +1,23 @@
 """Lightweight Session State Helper & Callback Framework for ADK Agents.
 
-Provides clean dot-notation access to ctx.state and higher-order callbacks
-without unnecessary boilerplate.
+Provides clean dot-notation access to ctx.state, built-in text extraction,
+and higher-order callbacks without unnecessary boilerplate.
 """
 
 from typing import Any, Callable, TypeVar
 
 T = TypeVar("T")
+
+
+def extract_text_from_output(val: Any) -> str:
+    """Extracts text from string, Part, Content, or Event objects."""
+    if isinstance(val, str):
+        return val.strip()
+    if hasattr(val, "content") and val.content:
+        return extract_text_from_output(val.content)
+    if hasattr(val, "parts") and val.parts:
+        return "\n".join(str(p.text) for p in val.parts if getattr(p, "text", None)).strip()
+    return str(val or "").strip()
 
 
 class AgentStore:
@@ -67,15 +78,17 @@ class AgentStore:
 
 
 def create_agent_state_callback(
-    extractor: Callable[[Any], Any],
-    updater: Callable[[Any, AgentStore], None],
+    target_path: str | None = None,
+    extractor: Callable[[Any], Any] = extract_text_from_output,
+    updater: Callable[[Any, AgentStore], None] | None = None,
     required_error_msg: str | None = None,
 ) -> Callable[..., Any]:
     """Higher-Order Function that creates a standardized ADK after_agent_callback.
 
     Args:
-        extractor: Function that extracts target payload from agent output context.
-        updater: Callback function receiving (extracted_payload, store) to mutate state.
+        target_path: Optional state dot-notation path to save extracted payload automatically.
+        extractor: Function that extracts target payload (defaults to extract_text_from_output).
+        updater: Optional custom callback function receiving (extracted_payload, store).
         required_error_msg: Optional error message to raise if extracted payload is empty.
     """
 
@@ -88,11 +101,15 @@ def create_agent_state_callback(
         output = getattr(active_ctx, "output", None)
         payload = extractor(output) if output else None
 
-        if not payload:
+        if not payload or (isinstance(payload, str) and len(payload.strip()) <= 20 and required_error_msg):
             if required_error_msg:
                 raise ValueError(required_error_msg)
             return
 
-        updater(payload, store)
+        if target_path:
+            store.set(target_path, payload)
+
+        if updater:
+            updater(payload, store)
 
     return callback

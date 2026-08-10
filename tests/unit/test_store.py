@@ -40,7 +40,10 @@ class TestAgentStoreFramework(unittest.TestCase):
         def dummy_updater(payload, store):
             store.set("user_story_markdown", payload)
 
-        callback = create_agent_state_callback(dummy_extractor, dummy_updater)
+        callback = create_agent_state_callback(
+            extractor=dummy_extractor,
+            updater=dummy_updater
+        )
         asyncio.run(callback(ctx))
 
         self.assertEqual(ctx.state["user_story_markdown"], "As a user, I want feature X.")
