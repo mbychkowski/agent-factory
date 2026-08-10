@@ -56,10 +56,6 @@ def extract_adk_payload(output: Any) -> Any:
     return str(output).strip()
 
 
-# Backwards compatibility alias
-extract_text_from_output = extract_adk_payload
-
-
 class AgentStore:
     """Lightweight Session State Store wrapping ADK Context (ctx.state).
 
