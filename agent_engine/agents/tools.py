@@ -10,6 +10,41 @@ from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnecti
 from agent_engine.agents.config import config
 
 
+class DynamicAuthHeaders(dict):
+    """Custom dictionary subclass that dynamically generates a fresh GitHub App Installation Token on copy/access."""
+
+    def __init__(self, toolsets: str):
+        super().__init__()
+        self["X-MCP-Toolsets"] = toolsets
+        self["X-MCP-Readonly"] = "false"
+
+    def _get_auth(self) -> str:
+        token = get_github_installation_token()
+        return f"Bearer {token}" if token else ""
+
+    def copy(self):
+        d = dict(self)
+        auth = self._get_auth()
+        if auth:
+            d["Authorization"] = auth
+        return d
+
+    def items(self):
+        return self.copy().items()
+
+    def get(self, key, default=None):
+        if str(key).lower() == "authorization":
+            return self._get_auth() or default
+        return super().get(key, default)
+
+    def __getitem__(self, key):
+        if str(key).lower() == "authorization":
+            auth = self._get_auth()
+            if auth:
+                return auth
+        return super().__getitem__(key)
+
+
 def get_github_mcp_toolset(
     toolsets: str = "issues,repos",
     allowed_tools: list[str] | None = None,
@@ -20,15 +55,10 @@ def get_github_mcp_toolset(
         toolsets: Comma-separated list of GitHub MCP toolsets to enable on server side (e.g. 'issues,repos').
         allowed_tools: Exact list of function names allowed for client-side tool whitelisting.
     """
-    installation_token = get_github_installation_token()
     return McpToolset(
         connection_params=StreamableHTTPConnectionParams(
             url="https://api.githubcopilot.com/mcp/",
-            headers={
-                "Authorization": f"Bearer {installation_token}",
-                "X-MCP-Toolsets": toolsets,
-                "X-MCP-Readonly": "false",
-            },
+            headers=DynamicAuthHeaders(toolsets=toolsets),
         ),
         tool_filter=allowed_tools,
     )
@@ -81,143 +111,43 @@ def get_github_installation_token() -> str:
 def update_github_issue(
     issue_id: int, body: str, title: str | None = None, ctx: Context = None
 ) -> dict[str, Any]:
-    """Update an existing GitHub issue's body description and/or title.
-
-    Args:
-        issue_id: The ID of the GitHub issue to update.
-        body: The updated issue body markdown.
-        title: Optional updated title for the issue.
-    """
-    print(f"[Tool: GitHub] Updating GitHub issue #{issue_id} description...")
+    """Updates a GitHub issue body description and optional title."""
     token = get_github_installation_token()
-    if token:
-        try:
-            import requests
+    if not token:
+        print("[GitHub] No installation token available. Skipping live API update.")
+        return {"id": issue_id, "status": "simulated_update"}
 
-            headers = {
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
+    import requests
+
+    repo = config.github_repo
+    if ctx and getattr(ctx, "state", None) and isinstance(ctx.state, dict):
+        issue_domain = ctx.state.get("issue")
+        if isinstance(issue_domain, dict) and issue_domain.get("repo"):
+            repo = issue_domain["repo"]
+
+    url = f"https://api.github.com/repos/{repo}/issues/{issue_id}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+    }
+    payload: dict[str, Any] = {"body": body}
+    if title:
+        payload["title"] = title
+
+    try:
+        resp = requests.patch(url, headers=headers, json=payload, timeout=10)
+        if resp.status_code in (200, 201):
+            issue_data = resp.json()
+            print(f"[GitHub] Successfully updated issue #{issue_id} in {repo}")
+            return {
+                "id": issue_id,
+                "status": "updated",
+                "url": issue_data.get("html_url"),
             }
-            repo = config.github_repo
-            if ctx and hasattr(ctx, "state") and isinstance(ctx.state, dict):
-                issue_domain = ctx.state.get("issue")
-                if isinstance(issue_domain, dict) and issue_domain.get("repo"):
-                    repo = issue_domain["repo"]
-
-            url = f"https://api.github.com/repos/{repo}/issues/{issue_id}"
-            payload = {"body": body}
-            if title:
-                payload["title"] = title
-            resp = requests.patch(url, headers=headers, json=payload, timeout=10)
-            if resp.status_code in (200, 201):
-                issue_data = resp.json()
-                if ctx and hasattr(ctx, "state"):
-                    ctx.state["user_story_markdown"] = body
-                print(
-                    f"[Tool: GitHub] Successfully updated description for Issue #{issue_id} in {repo}"
-                )
-                return {
-                    "id": issue_id,
-                    "status": "updated",
-                    "url": issue_data.get("html_url"),
-                }
-            else:
-                print(f"[Tool: GitHub Update Error] ({resp.status_code}): {resp.text}")
-        except Exception as e:
-            print(f"[Tool: GitHub Update Error] {e}")
-    else:
-        print("[Tool: GitHub Warning] No GitHub installation token available (check GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY). Skipping live API update.")
-
-    return {"id": issue_id, "status": "simulated_update"}
-
-
-def sync_github_issue_labels(
-    issue_id: int, status_label: str, phase_label: str, ctx: Context = None
-) -> dict[str, Any]:
-    """Replaces agent status and phase labels on a GitHub issue to reflect active workflow state.
-
-    Args:
-        issue_id: The ID of the GitHub issue to update.
-        status_label: Active status label (e.g., 'agent:in-progress', 'agent:completed').
-        phase_label: Active phase label (e.g., 'phase:user-story').
-        ctx: Workflow Context instance.
-    """
-    print(
-        f"[Tool: GitHub Labels] Syncing labels for Issue #{issue_id}: status='{status_label}', phase='{phase_label}'"
-    )
-    token = get_github_installation_token()
-
-    managed_status_labels = {
-        "agent:in-progress",
-        "agent:needs-human-lgtm",
-        "agent:completed",
-    }
-    managed_phase_labels = {
-        "phase:user-story",
-    }
-
-    if token and issue_id:
-        try:
-            import requests
-
-            headers = {
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-            }
-            repo = config.github_repo
-            if ctx and hasattr(ctx, "state") and isinstance(ctx.state, dict):
-                issue_domain = ctx.state.get("issue")
-                if isinstance(issue_domain, dict) and issue_domain.get("repo"):
-                    repo = issue_domain["repo"]
-
-            url = f"https://api.github.com/repos/{repo}/issues/{issue_id}/labels"
-
-            resp = requests.get(url, headers=headers, timeout=10)
-            current_labels = []
-            if resp.status_code == 200:
-                current_labels = [
-                    l["name"] if isinstance(l, dict) else str(l) for l in resp.json()
-                ]
-
-            preserved_labels = [
-                lbl
-                for lbl in current_labels
-                if lbl not in managed_status_labels and lbl not in managed_phase_labels
-            ]
-
-            updated_labels = list(preserved_labels)
-            if status_label:
-                updated_labels.append(status_label)
-            if phase_label:
-                updated_labels.append(phase_label)
-
-            put_resp = requests.put(
-                url, headers=headers, json={"labels": updated_labels}, timeout=10
-            )
-            if put_resp.status_code in (200, 201):
-                print(
-                    f"[Tool: GitHub Labels] Successfully updated Issue #{issue_id} labels: {updated_labels}"
-                )
-                if ctx and hasattr(ctx, "state"):
-                    ctx.state["current_status_label"] = status_label
-                    ctx.state["current_phase_label"] = phase_label
-                return {"id": issue_id, "status": "updated", "labels": updated_labels}
-            else:
-                print(
-                    f"[Tool: GitHub Labels Warning] ({put_resp.status_code}): {put_resp.text}"
-                )
-        except Exception as e:
-            print(f"[Tool: GitHub Labels Error] {e}")
-
-    if ctx and hasattr(ctx, "state"):
-        ctx.state["current_status_label"] = status_label
-        ctx.state["current_phase_label"] = phase_label
-    return {
-        "id": issue_id,
-        "status": "simulated_update",
-        "status_label": status_label,
-        "phase_label": phase_label,
-    }
-
+        print(f"[GitHub Error {resp.status_code}] {resp.text}")
+        return {"id": issue_id, "status": "error", "error": resp.text}
+    except Exception as e:
+        print(f"[GitHub Error] {e}")
+        return {"id": issue_id, "status": "error", "error": str(e)}
 
 

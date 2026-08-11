@@ -1,121 +1,81 @@
 import asyncio
 from typing import Any
 
-from agent_engine.agents.state import (
-    get_issue_id,
-    get_story_review_rounds,
-    get_user_story,
-    increment_story_review_rounds,
-    is_story_peer_reviewed,
-    record_critique_result,
-    set_story_peer_reviewed
-)
-
-# Import Peer Review Critique Agents
-from agent_engine.agents.story_critic import story_critic_agent as agent_story_critic
-
-from agent_engine.agents.store import extract_adk_payload
-
-# Import Core Spec Agents
-from agent_engine.agents.story_refiner.agent import (
-    root_agent as agent_user_story_refiner,
-)
-
-# Import Tools
-from agent_engine.agents.tools import (
-    sync_github_issue_labels,
-    update_github_issue,
-)
 from google.adk import Event, Workflow
 from google.adk.agents.context import Context
 from google.adk.events.event_actions import EventActions
 from google.adk.workflow import START
 
-
-async def gate_entry(node_input: Any, ctx: Context) -> Event:
-    """Evaluates incoming human input and routes directly to agent_user_story_refiner."""
-    parent_id = get_issue_id(ctx)
-
-    if parent_id:
-        try:
-            current_phase = "phase:user-story"
-            sync_github_issue_labels(
-                int(parent_id), "agent:in-progress", current_phase, ctx=ctx
-            )
-        except Exception as e:
-            print(f"[Entry Gate Label Sync Warning] {e}")
-
-    print("Entry Gate: Routing directly to User Story Refiner...")
-    return Event(output=node_input, actions=EventActions(route="agent_user_story_refiner"))
+from agent_engine.agents.story_critic.agent import (
+    story_critic_agent,
+)
+from agent_engine.agents.story_refiner.agent import (
+    root_agent as agent_user_story_refiner,
+)
+from agent_engine.agents.tools import (
+    update_github_issue,
+)
 
 
-async def gate_evaluate_critic_review(node_input: Any, ctx: Context) -> Event:
-    """Evaluates agent_story_critic output. If approved, marks peer_reviewed=True.
+def _get_issue_id(ctx: Any) -> int | None:
+    state = getattr(ctx, "state", {}) if hasattr(ctx, "state") else {}
+    val = state.get("parent_issue_id") or (state.get("issue", {}).get("id") if isinstance(state.get("issue"), dict) else None)
+    return int(val) if val is not None else None
 
-    If rejected, sends critique back to agent_user_story_refiner for revision (up to 3 rounds).
+
+def _get_user_story(ctx: Any) -> str:
+    state = getattr(ctx, "state", {}) if hasattr(ctx, "state") else {}
+    return str(state.get("user_story_markdown") or "")
+
+
+async def gate_set_session_state(node_input: Any, ctx: Context) -> Event:
+    """Entry gate that receives input and initializes session state variables."""
+    print("Entry Gate: Initializing session state and starting deliberation flow...")
+    initial_state_delta = {
+        "latest_critique_notes": "N/A (Initial Pass)",
+        "latest_missing_elements": "None",
+        "latest_critique_score": 0,
+        "latest_critique_is_approved": False,
+        "user_story_markdown": "",
+        "specifications": {"story_review_rounds": 0},
+    }
+    if hasattr(ctx, "state") and isinstance(ctx.state, dict):
+        for k, v in initial_state_delta.items():
+            ctx.state.setdefault(k, v)
+
+    return Event(output=node_input, actions=EventActions(state_delta=initial_state_delta))
+
+
+def loop_router(ctx: Context) -> Event:
+    """Graph router node that detects how many review loops have occurred by referencing state.
+
+    If less than 3 loops have completed, routes back to story_refiner ('loop_again').
+    Otherwise, routes to gate_publish_user_story ('publish').
     """
-    is_approved = False
-    score = None
-    critique_notes = ""
-    missing_elements = []
+    state = getattr(ctx, "state", {}) if hasattr(ctx, "state") else {}
+    specifications = state.get("specifications", {}) if isinstance(state.get("specifications"), dict) else {}
+    rounds = int(specifications.get("story_review_rounds", 0))
 
-    try:
-        data = extract_adk_payload(node_input)
-        if isinstance(data, dict):
-            is_approved = bool(data.get("is_approved", False))
-            score = data.get("score")
-            critique_notes = str(data.get("critique_notes", ""))
-            missing_elements = data.get("missing_elements", [])
-    except Exception as e:
-        print(f"[Gate Critic Parse Warning] {e}")
+    print(f"[Loop Router] Completed review round {rounds} / 3.")
 
-    review_rounds = get_story_review_rounds(ctx)
-    record_critique_result(
-        ctx,
-        is_approved=is_approved,
-        critique_notes=critique_notes,
-        score=score,
-        missing_elements=missing_elements,
-    )
+    if rounds < 3:
+        print(f"[Loop Router] Round {rounds} < 3: Routing back to User Story Refiner for revision...")
+        return Event(actions=EventActions(route="loop_again"))
 
-    if is_approved:
-        print(
-            f"Story Peer Review Approved on round {review_rounds}. Marking as peer-reviewed."
-        )
-        set_story_peer_reviewed(ctx, True)
-        return Event(actions=EventActions(route="gate_publish_user_story"))
-
-    if review_rounds >= 3:
-        print(
-            f"Story Peer Review reached max rounds ({review_rounds}) without approval. Proceeding to GitHub update with peer_reviewed=False."
-        )
-        set_story_peer_reviewed(ctx, False)
-        return Event(actions=EventActions(route="gate_publish_user_story"))
-
-    new_rounds = increment_story_review_rounds(ctx)
-    print(
-        f"Story Peer Review Requesting Revision (Round {new_rounds}): {critique_notes}"
-    )
-    revision_prompt = (
-        f"The Technical Architect reviewed your drafted User Story and requested the following improvements:\n"
-        f"{critique_notes}\n\n"
-        "Please revise the User Story to address these gaps."
-    )
-    return Event(
-        output=revision_prompt, actions=EventActions(route="agent_user_story_refiner")
-    )
+    print(f"[Loop Router] Round {rounds} >= 3: Required 3 review loops completed. Routing to Publish Gate...")
+    return Event(actions=EventActions(route="publish"))
 
 
 async def gate_publish_user_story(ctx: Context) -> Event:
-    """Updates main issue description on GitHub and marks status as completed or needs-human-lgtm."""
+    """Updates main issue description on GitHub with the refined user story."""
     await asyncio.sleep(4)
 
-    parent_id = get_issue_id(ctx)
+    parent_id = _get_issue_id(ctx)
     if not parent_id:
         print("Gate Evaluating: Parent Issue ID not found. Finishing turn.")
         return Event()
 
-    user_story = get_user_story(ctx)
+    user_story = _get_user_story(ctx)
     if not user_story:
         raise ValueError("User Story content missing from session state when attempting to publish to GitHub.")
 
@@ -127,34 +87,21 @@ async def gate_publish_user_story(ctx: Context) -> Event:
     except Exception as e:
         print(f"[Story Refiner Gate Warning] Could not auto-update issue #{parent_id}: {e}")
 
-    # Label status: 'agent:completed' if approved by architect critic, else 'agent:needs-human-lgtm'
-    status_label = (
-        "agent:completed"
-        if is_story_peer_reviewed(ctx)
-        else "agent:needs-human-lgtm"
-    )
-
-    try:
-        sync_github_issue_labels(int(parent_id), status_label, "phase:user-story", ctx=ctx)
-    except Exception as e:
-        print(f"[Story Refiner Gate Label Sync Warning] {e}")
-
-    return Event(output=f"User Story Issue #{parent_id} refined (status='{status_label}').")
+    return Event(output=f"User Story Issue #{parent_id} refined.")
 
 
 root_workflow = Workflow(
     name="agile_github_planning_app",
     edges=[
-        (START, gate_entry),
-        (gate_entry, agent_user_story_refiner),
-        (agent_user_story_refiner, agent_story_critic), # Direct agent-to-agent edge via after_agent_callback!
-        (agent_story_critic, gate_evaluate_critic_review),
-        (
-            gate_evaluate_critic_review,
-            {
-                "agent_user_story_refiner": agent_user_story_refiner,
-                "gate_publish_user_story": gate_publish_user_story,
-            },
+        (START, gate_set_session_state),
+        (gate_set_session_state, agent_user_story_refiner),
+        (agent_user_story_refiner, story_critic_agent),
+        (story_critic_agent, loop_router),
+        (loop_router, {
+            "loop_again": agent_user_story_refiner,
+            "publish": gate_publish_user_story
+          }
         ),
     ],
 )
+

@@ -78,10 +78,11 @@ async def run_workflow(input_path: str, output_path: str):
     session = await session_service.get_session(
         app_name=runner.app_name, user_id=user_id, session_id=session_id
     )
-    from agent_engine.agents.state import get_user_story
 
     # Extract our generated user story
-    user_story = get_user_story(session) or "No user story was generated."
+    state = getattr(session, "state", {}) if session else {}
+    user_story = state.get("user_story_markdown") or "No user story was generated."
+
 
     # Compile the final specification document
     compiled_spec = f"""# Certified User Story & Specification

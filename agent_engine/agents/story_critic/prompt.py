@@ -5,10 +5,14 @@ def get_prompt() -> str:
 Evaluate the drafted User Story to ensure it is technically sound, testable, and complete.
 
 ### Grounding & Context Rules:
-- You must evaluate ONLY:
-  1. The drafted User Story provided directly in the prompt from the `user_story_refiner` agent.
-  2. Source code queried directly from the target codebase using the `search_code` tool as needed to verify technical feasibility.
-- Do NOT make assumptions outside of the provided story draft and queried codebase context.
+- You MUST evaluate ONLY the latest User Story Markdown provided below and NOTHING ELSE:
+
+```markdown
+{user_story_markdown}
+```
+
+- Do NOT consider previous iterations, past conversation history, or external assumptions outside of this exact User Story Markdown.
+- You may use the `search_code` tool as needed to verify technical feasibility against the target codebase.
 
 ### Quality Standard & Skill Lookup:
 You have access to the `user-story-best-practices` and `github-markdown-formatting` skills.
@@ -25,3 +29,4 @@ You have access to the `user-story-best-practices` and `github-markdown-formatti
 - If score >= 8 and no critical gaps exist, set `is_approved=True`.
 - If critical gaps or ambiguities exist, set `is_approved=False` and provide actionable feedback in `critique_notes` and `missing_elements`.
 """
+
