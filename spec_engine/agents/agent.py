@@ -52,6 +52,7 @@ async def gate_set_session_state(node_input: Any, ctx: Context) -> Event:
         "latest_critique_score": 0,
         "latest_critique_is_approved": False,
         "user_story_markdown": "",
+        "council_review": [],
         "specifications": {
             "full_spec_markdown": "",
             "story_review_rounds": 0,
@@ -61,6 +62,7 @@ async def gate_set_session_state(node_input: Any, ctx: Context) -> Event:
                 "tech_score": 0,
                 "security_score": 0,
             },
+            "council_notes": "",
             "latest_council_feedback": "",
             "council_approved": False,
         },
@@ -127,10 +129,32 @@ async def council_review_gate(node_input: Any, ctx: Context) -> Event:
     print("[Council Review Gate] Synthesizing parallel reviews via Council Chair...")
     chair_output = await _run_agent_helper(council_chair_agent, council_payload, ctx=ctx)
 
-    # Update state adhering to Data State Schema in PLANNING_ENGINE_GUIDE.md
     rounds = int(specifications.get("council_review_rounds", 0)) + 1
+
+    # Record historical round in council_review list
+    history_entry = {
+        "round": rounds,
+        "council_scores": {
+            "product_score": product_score,
+            "tech_score": tech_score,
+            "security_score": security_score,
+        },
+        "council_review": {
+            "product_review": product_out,
+            "tech_review": tech_out,
+            "security_review": security_out,
+        },
+        "chair_notes": chair_output,
+    }
+
+    council_history = state.setdefault("council_review", [])
+    if isinstance(council_history, list):
+        council_history.append(history_entry)
+
+    # Update active snapshot state adhering to Data State Schema in PLANNING_ENGINE_GUIDE.md
     specifications["council_review_rounds"] = rounds
     specifications["full_spec_markdown"] = spec_draft
+    specifications["council_notes"] = chair_output
     specifications["latest_council_feedback"] = chair_output
     specifications["council_scores"] = {
         "product_score": product_score,
@@ -155,6 +179,7 @@ async def council_review_gate(node_input: Any, ctx: Context) -> Event:
                 "latest_critique_notes": chair_output,
                 "latest_critique_score": tech_score,
                 "specifications": dict(specifications),
+                "council_review": list(council_history),
             }
         ),
     )

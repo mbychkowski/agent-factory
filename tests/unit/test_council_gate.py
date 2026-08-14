@@ -25,6 +25,7 @@ class TestCouncilGate(unittest.TestCase):
             "critique_result": {"score": 8, "is_approved": True},
             "security_review_result": {"security_score": 95, "is_approved": True},
             "specifications": {"council_review_rounds": 0},
+            "council_review": [],
         }
 
         event = asyncio_run(council_review_gate("Draft Spec", ctx))
@@ -36,6 +37,11 @@ class TestCouncilGate(unittest.TestCase):
             {"product_score": 90, "tech_score": 8, "security_score": 95},
         )
         self.assertEqual(ctx.state["specifications"]["latest_council_feedback"], "Consolidated revision guide")
+        self.assertEqual(len(ctx.state["council_review"]), 1)
+        self.assertEqual(ctx.state["council_review"][0]["round"], 1)
+        self.assertEqual(
+            ctx.state["council_review"][0]["council_review"]["product_review"], "Product feedback"
+        )
 
     def test_council_loop_router_two_round_limit(self) -> None:
         ctx = MagicMock(spec=Context)

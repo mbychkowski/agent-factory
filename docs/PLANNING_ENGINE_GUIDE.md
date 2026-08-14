@@ -100,11 +100,11 @@ async def council_review_gate(node_input: str, ctx: Context) -> Event:
 def council_loop_router(ctx: Context) -> Event:
     """Routes back to DRA if rounds < 2, otherwise routes to Human Approval Gate."""
     rounds = ctx.state.get("specifications", {}).get("council_review_rounds", 0)
-    
+
     if rounds < 2:
         print(f"[Council Router] Round {rounds} < 2: Routing back to DRA for revision...")
         return Event(actions=EventActions(route="loop_again"))
-    
+
     print(f"[Council Router] Fixed 2 rounds completed. Routing to Human Gate 1...")
     return Event(actions=EventActions(route="proceed_to_human_gate"))
 
@@ -152,16 +152,48 @@ ADK session state stores structured domain data throughout the planning lifecycl
     "url": "https://github.com/acme/web-app/issues/42"
   },
   "specifications": {
-    "full_spec_markdown": "# Specification...",
+    "full_spec_markdown": "# FEATURE-101: Implement OAuth2 Authentication\n\n...",
     "council_scores": {
       "product_score": 92,
       "tech_score": 88,
       "security_score": 95
     },
+    "council_notes": "All council members approved with minor recommendations on token expiry NFRs.",
     "council_review_rounds": 2,
-    "council_approved": true
+    "council_approved": true,
+    "human_spec_approved": true,
+    "human_feedback": "Approved. Proceed with swarm decomposition."
   },
-  "human_spec_approved": true,
+  "council_review": [
+    {
+      "round": 1,
+      "council_scores": {
+        "product_score": 75,
+        "tech_score": 70,
+        "security_score": 80
+      },
+      "council_review": {
+        "product_review": "INVEST score 75. Missing explicit user persona acceptance scenario for token refresh.",
+        "tech_review": "Tech score 7/10. Missing NFR targets for rate limiting and token revocation latency.",
+        "security_review": "Security score 80/100. Need explicit OAuth state parameter validation to prevent CSRF."
+      },
+      "chair_notes": "Round 1 Revision Guide: Add token refresh BDD scenario, specify rate limits, and enforce CSRF state check."
+    },
+    {
+      "round": 2,
+      "council_scores": {
+        "product_score": 92,
+        "tech_score": 88,
+        "security_score": 95
+      },
+      "council_review": {
+        "product_review": "All user scenarios clear and testable.",
+        "tech_review": "Tech score 9/10. Architecture grounded with file anchors.",
+        "security_review": "Security score 95/100. Security controls and OWASP checks satisfied."
+      },
+      "chair_notes": "Round 2 Final Synthesis: Specification certified. Approved for Human Gate review."
+    }
+  ],
   "task_manifest": [
     {
       "task_id": "TASK-1",
