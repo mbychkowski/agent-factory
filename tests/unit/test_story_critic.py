@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from spec_engine.agents.agent import loop_router, root_workflow
+from spec_engine.agents.agent import council_loop_router, root_workflow
 from spec_engine.agents.directly_responsible_agent.prompt import get_prompt as get_dra_prompt
 from spec_engine.agents.story_critic.agent import story_critic_agent
 
@@ -19,21 +19,21 @@ def test_dra_prompt_critique_placeholders():
     assert "{latest_missing_elements}" in prompt
 
 
-def test_loop_router_logic():
+def test_council_loop_router_logic():
     ctx = MagicMock()
 
-    # Case 1: Less than 3 rounds -> route back to directly_responsible_agent
-    ctx.state = {"specifications": {"story_review_rounds": 1}}
-    event1 = loop_router(ctx)
+    # Case 1: Less than 2 rounds -> route back to directly_responsible_agent
+    ctx.state = {"specifications": {"council_review_rounds": 0}}
+    event1 = council_loop_router(ctx)
     assert event1.actions.route == "loop_again"
 
-    ctx.state = {"specifications": {"story_review_rounds": 2}}
-    event2 = loop_router(ctx)
+    ctx.state = {"specifications": {"council_review_rounds": 1}}
+    event2 = council_loop_router(ctx)
     assert event2.actions.route == "loop_again"
 
-    # Case 2: 3 or more rounds -> route to publish gate
-    ctx.state = {"specifications": {"story_review_rounds": 3}}
-    event3 = loop_router(ctx)
+    # Case 2: 2 or more rounds -> route to publish gate
+    ctx.state = {"specifications": {"council_review_rounds": 2}}
+    event3 = council_loop_router(ctx)
     assert event3.actions.route == "publish"
 
 
