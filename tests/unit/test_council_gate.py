@@ -38,10 +38,10 @@ class TestCouncilGate(unittest.TestCase):
         )
         self.assertEqual(ctx.state["specifications"]["latest_council_feedback"], "Consolidated revision guide")
         self.assertEqual(len(ctx.state["council_review"]), 1)
-        self.assertEqual(ctx.state["council_review"][0]["round"], 1)
-        self.assertEqual(
-            ctx.state["council_review"][0]["council_review"]["product_review"], "Product feedback"
-        )
+        self.assertEqual(ctx.state["council_review"][0]["product_review"], "Product feedback")
+        self.assertEqual(ctx.state["council_review"][0]["tech_review"], "Tech feedback")
+        self.assertEqual(ctx.state["council_review"][0]["security_review"], "Security feedback")
+        self.assertEqual(ctx.state["council_review"][0]["council_notes"], "Consolidated revision guide")
 
     def test_council_loop_router_two_round_limit(self) -> None:
         ctx = MagicMock(spec=Context)
