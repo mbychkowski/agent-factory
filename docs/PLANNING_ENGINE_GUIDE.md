@@ -167,36 +167,38 @@ ADK session state stores structured domain data throughout the planning lifecycl
     "full_spec_markdown": "# FEATURE-101: Implement OAuth2 Authentication\n\n...",
     "revision_summary": "Added OAuth refresh token BDD scenarios, rate limiting NFRs, and CSRF state parameter validation.",
     "council_scores": {
-      "product_score": 92,
-      "tech_score": 88,
-      "security_score": 95
+      "product": 92,
+      "tech": 88,
+      "security": 95
     },
-    "council_notes": "All council members approved with minor recommendations on token expiry NFRs.",
+    "council_notes_summarized": "All council members approved with minor recommendations on token expiry NFRs.",
     "council_review_rounds": 2,
     "council_approved": true
   },
   "council_review": [
     {
       "council_scores": {
-        "product_score": 75,
-        "tech_score": 70,
-        "security_score": 80
+        "product": 75,
+        "tech": 70,
+        "security": 80
       },
-      "product_review": "Missing explicit user persona acceptance scenario for token refresh.",
-      "tech_review": "Missing NFR targets for rate limiting and token revocation latency.",
-      "security_review": "Need explicit OAuth state parameter validation to prevent CSRF.",
-      "council_notes": "Round 1 Revision Guide: Add token refresh BDD scenario, specify rate limits, and enforce CSRF state check."
+      "council_notes": {
+        "product": "Missing explicit user persona acceptance scenario for token refresh.",
+        "tech": "Missing NFR targets for rate limiting and token revocation latency.",
+        "security": "Need explicit OAuth state parameter validation to prevent CSRF."
+      }
     },
     {
       "council_scores": {
-        "product_score": 92,
-        "tech_score": 88,
-        "security_score": 95
+        "product": 92,
+        "tech": 88,
+        "security": 95
       },
-      "product_review": "All user scenarios clear and testable.",
-      "tech_review": "Architecture grounded with file anchors.",
-      "security_review": "Security controls and OWASP checks satisfied.",
-      "council_notes": "Round 2 Final Synthesis: Specification certified. Approved for Human Gate review."
+      "council_notes": {
+        "product": "All user scenarios clear and testable.",
+        "tech": "Architecture grounded with file anchors.",
+        "security": "Security controls and OWASP checks satisfied."
+      }
     }
   ],
   "task_manifest": [

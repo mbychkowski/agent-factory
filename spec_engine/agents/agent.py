@@ -59,11 +59,11 @@ async def gate_set_session_state(node_input: Any, ctx: Context) -> Event:
             "story_review_rounds": 0,
             "council_review_rounds": 0,
             "council_scores": {
-                "product_score": 0,
-                "tech_score": 0,
-                "security_score": 0,
+                "product": 0,
+                "tech": 0,
+                "security": 0,
             },
-            "council_notes": "",
+            "council_notes_summarized": "",
             "latest_council_feedback": "",
             "council_approved": False,
         },
@@ -135,14 +135,15 @@ async def council_review_gate(node_input: Any, ctx: Context) -> Event:
     # Record historical round in council_review list
     history_entry = {
         "council_scores": {
-            "product_score": product_score,
-            "tech_score": tech_score,
-            "security_score": security_score,
+            "product": product_score,
+            "tech": tech_score,
+            "security": security_score,
         },
-        "product_review": product_out,
-        "tech_review": tech_out,
-        "security_review": security_out,
-        "council_notes": chair_output,
+        "council_notes": {
+            "product": product_out,
+            "tech": tech_out,
+            "security": security_out,
+        },
     }
 
     council_history = state.setdefault("council_review", [])
@@ -152,12 +153,13 @@ async def council_review_gate(node_input: Any, ctx: Context) -> Event:
     # Update active snapshot state adhering to Data State Schema in PLANNING_ENGINE_GUIDE.md
     specifications["council_review_rounds"] = rounds
     specifications["full_spec_markdown"] = spec_draft
+    specifications["council_notes_summarized"] = chair_output
     specifications["council_notes"] = chair_output
     specifications["latest_council_feedback"] = chair_output
     specifications["council_scores"] = {
-        "product_score": product_score,
-        "tech_score": tech_score,
-        "security_score": security_score,
+        "product": product_score,
+        "tech": tech_score,
+        "security": security_score,
     }
 
     # Re-assign top level state for DRA prompt placeholders & state update tracking

@@ -62,6 +62,4 @@ directly_responsible_agent = LlmAgent(
     after_agent_callback=save_user_story_callback,
 )
 
-dra_agent = directly_responsible_agent
-user_story_refiner_agent = directly_responsible_agent
 root_agent = directly_responsible_agent
