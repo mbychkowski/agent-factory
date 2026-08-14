@@ -10,6 +10,7 @@ council_chair_agent = LlmAgent(
     model=config.model,
     description="Council Chair synthesizing Product, Tech, and Security reviews into a consolidated revision guide.",
     instruction=get_prompt(),
+    include_contents="none",
     output_schema=CouncilChairResult,
     output_key="council_chair_result",
 )

@@ -10,6 +10,7 @@ product_reviewer_agent = LlmAgent(
     model=config.model,
     description="Product Reviewer on the Council evaluating specs for user value, INVEST principles, and scope clarity.",
     instruction=get_prompt(),
+    include_contents="none",
     output_schema=ProductReviewResult,
     output_key="product_review_result",
 )

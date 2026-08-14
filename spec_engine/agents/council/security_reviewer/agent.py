@@ -10,6 +10,7 @@ security_reviewer_agent = LlmAgent(
     model=config.model,
     description="Security Lead on the Council evaluating specs for OWASP risks, authentication, and compliance.",
     instruction=get_prompt(),
+    include_contents="none",
     output_schema=SecurityReviewResult,
     output_key="security_review_result",
 )

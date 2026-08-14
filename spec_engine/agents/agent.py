@@ -55,6 +55,7 @@ async def gate_set_session_state(node_input: Any, ctx: Context) -> Event:
         "council_review": [],
         "specifications": {
             "full_spec_markdown": "",
+            "revision_summary": "",
             "story_review_rounds": 0,
             "council_review_rounds": 0,
             "council_scores": {

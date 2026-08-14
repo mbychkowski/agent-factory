@@ -139,6 +139,18 @@ root_workflow = Workflow(
 
 ---
 
+## 🧠 Architectural Principle: Stateless Council vs. Stateful DRA
+
+1. **Council Members are 100% Stateless Blind Reviewers (`include_contents="none"`)**:
+   - Each Council agent (Product, Tech, Security, Council Chair) evaluates the draft specification purely on its present content, as if viewing it for the very first time.
+   - They do not retain conversation history or bias from prior rounds. This guarantees objective, repeatable evaluations.
+
+2. **The Directly Responsible Agent (DRA) is Stateful**:
+   - The Lead Spec Author (DRA) retains session history and reads `specifications["council_notes"]` and `specifications["revision_summary"]`.
+   - The DRA uses this context to address feedback, fill gaps, and log its revision changelog across rounds.
+
+---
+
 ## 🛠️ Data State Schema (`ctx.state`)
 
 ADK session state stores structured domain data throughout the planning lifecycle:
@@ -153,6 +165,7 @@ ADK session state stores structured domain data throughout the planning lifecycl
   },
   "specifications": {
     "full_spec_markdown": "# FEATURE-101: Implement OAuth2 Authentication\n\n...",
+    "revision_summary": "Round 2 Revision: Added OAuth refresh token BDD scenarios, rate limiting NFRs, and CSRF state parameter validation.",
     "council_scores": {
       "product_score": 92,
       "tech_score": 88,
@@ -160,9 +173,7 @@ ADK session state stores structured domain data throughout the planning lifecycl
     },
     "council_notes": "All council members approved with minor recommendations on token expiry NFRs.",
     "council_review_rounds": 2,
-    "council_approved": true,
-    "human_spec_approved": true,
-    "human_feedback": "Approved. Proceed with swarm decomposition."
+    "council_approved": true
   },
   "council_review": [
     {
@@ -188,8 +199,8 @@ ADK session state stores structured domain data throughout the planning lifecycl
       },
       "council_review": {
         "product_review": "All user scenarios clear and testable.",
-        "tech_review": "Tech score 9/10. Architecture grounded with file anchors.",
-        "security_review": "Security score 95/100. Security controls and OWASP checks satisfied."
+        "tech_review": "Architecture grounded with file anchors.",
+        "security_review": "Security controls and OWASP checks satisfied."
       },
       "chair_notes": "Round 2 Final Synthesis: Specification certified. Approved for Human Gate review."
     }
@@ -199,6 +210,7 @@ ADK session state stores structured domain data throughout the planning lifecycl
       "task_id": "TASK-1",
       "title": "Create User & Token DB Migrations",
       "subsystem": "database",
+      "status": "pending",
       "acceptance_criteria": [
         "Given PostgreSQL database, When migration 001 runs, Then users and tokens tables exist."
       ],
