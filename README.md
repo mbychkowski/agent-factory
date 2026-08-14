@@ -12,7 +12,7 @@ The Spec Deliberator Agent is built to run as a multi-tenant GitHub App service 
 
 ```
   ┌──────────────────────┐  1. GitHub Webhook (Issue #42)   ┌─────────────────────────────┐
-  │ Any Target GitHub    ├─────────────────────────────────►│ Cloud Run Gateway Proxy     │
+  │ Any Target GitHub    ├─────────────────────────────────►│ Surface Gateway Proxy       │
   │ Repository (`owner/repo`)│                              │ (`/webhooks/github`)        │
   └──────────────────────┘                                  └──────────────┬──────────────┘
                                                                            │
@@ -29,8 +29,8 @@ The Spec Deliberator Agent is built to run as a multi-tenant GitHub App service 
                                                                            ▼
                                                             ┌─────────────────────────────┐
                                                             │ ADK Workflow Runner         │
-                                                            │ - `user_story_refiner`      │
-                                                            │ - `story_critic`            │
+                                                            │ - `directly_responsible_agent`
+                                                            │ - `council_reviewers`       │
                                                             └─────────────────────────────┘
 ```
 
@@ -43,7 +43,7 @@ The Spec Deliberator Agent is built to run as a multi-tenant GitHub App service 
    * **`specifications`**: Stores current story drafts (`user_story_markdown`), peer review approval status, and audit history (`critique_history`).
    * **`comments`**: Captures delta comments across surfaces (GitHub, Slack, Discord).
 3. **Native Google ADK Skills Framework (`SkillToolset`):**
-   * Uses ADK's native `load_skill_from_dir` and `SkillToolset` ([`user-story-best-practices/SKILL.md`](agent_engine/skills/user-story-best-practices/SKILL.md)).
+   * Uses ADK's native `load_skill_from_dir` and `SkillToolset` ([`user-story-best-practices/SKILL.md`](spec_engine/skills/user-story-best-practices/SKILL.md)).
    * Instructions are loaded on demand via tool calls (`load_skill`), keeping system prompt context overhead extremely low.
 
 ---
@@ -75,13 +75,13 @@ sequenceDiagram
 
 ## 🤖 Specialized Agents & Skills
 
-The system coordinates specialized ADK agents inside `agent_engine/agents`:
+The system coordinates specialized ADK agents inside `spec_engine/agents`:
 
-1. **User Story Refiner Agent** ([`user_story_refiner`](agent_engine/agents/story_refiner/agent.py)):
-   Product Owner persona operating in automated single-pass mode. Refines raw inputs into a Jira/GitLab standardized user story with BDD (Given/When/Then) acceptance criteria.
-2. **Story Critic Agent** ([`story_critic`](agent_engine/agents/critique/story_critic.py)):
-   Software Architect persona that peer-reviews User Story drafts against the `user-story-best-practices` skill for technical feasibility, NFR completeness, security, and testability.
-3. **Native ADK SkillToolset** ([`user-story-best-practices`](agent_engine/skills/user-story-best-practices/SKILL.md)):
+1. **Directly Responsible Agent (DRA)** ([`directly_responsible_agent`](spec_engine/agents/directly_responsible_agent/agent.py)):
+   Lead Spec Author operating in automated single-pass mode. Refines raw inputs into a Jira/GitLab standardized user story with BDD (Given/When/Then) acceptance criteria and technical specifications.
+2. **Council Review Panel** ([`council/`](spec_engine/agents/council/)):
+   Panel of reviewers including Product Reviewer (`product_reviewer`), Tech Architect Reviewer (`tech_reviewer`), Security Reviewer (`security_reviewer`), and Council Chair (`council_chair`) that evaluate and refine specification drafts.
+3. **Native ADK SkillToolset** ([`user-story-best-practices`](spec_engine/skills/user-story-best-practices/SKILL.md)):
    Enterprise quality standard skill defining INVEST criteria, BDD Given/When/Then scenario structures, Non-Functional Requirements (NFR) checklists, and Definition of Done.
 
 ---
@@ -90,11 +90,14 @@ The system coordinates specialized ADK agents inside `agent_engine/agents`:
 
 ```
 agent-factory/
-├── agent_engine/                   # Service 1: Core ADK Multi-Agent System
+├── spec_engine/                    # Service 1: Core ADK Multi-Agent System
 │   ├── agents/                     #   - Specialized ADK agents & prompts
-│   │   ├── story_refiner/          #     • Product Owner agent
-│   │   ├── critique/               #     • Technical Architect critic agent
-│   │   ├── state.py                #     • Structured domain state getters/setters
+│   │   ├── directly_responsible_agent/ #  • Lead Spec Author (DRA)
+│   │   ├── council/                #     • Council panel (Product, Tech, Security, Chair)
+│   │   │   ├── product_reviewer/   #     • Product Manager reviewer
+│   │   │   ├── tech_reviewer/      #     • Technical Architect reviewer
+│   │   │   ├── security_reviewer/  #     • Security Lead reviewer
+│   │   │   └── council_chair/      #     • Council Chair aggregator
 │   │   └── tools.py                #     • Multi-tenant GitHub API & search tools
 │   ├── skills/                     #   - Native ADK Skills
 │   │   ├── skills.py               #     • Native SkillToolset loader

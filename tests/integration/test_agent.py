@@ -19,7 +19,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-from agent_engine.app.agent import root_agent
+from spec_engine.app.agent import root_agent
 
 
 class TestAgentIntegration(unittest.TestCase):

@@ -3,8 +3,8 @@ from unittest.mock import MagicMock
 
 from google.adk.agents.context import Context
 
-from agent_engine.agents.agent import gate_set_session_state
-from agent_engine.agents.story_refiner.agent import save_user_story_callback
+from spec_engine.agents.agent import gate_set_session_state
+from spec_engine.agents.directly_responsible_agent.agent import save_user_story_callback
 
 
 class TestWorkflowGates(unittest.TestCase):

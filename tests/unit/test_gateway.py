@@ -6,10 +6,10 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from gateway.app.config import config
-from gateway.app.utils.bot_filter import is_bot_event
-from gateway.app.utils.security import verify_github_signature
-from gateway.main import app
+from surface_gateway.app.config import config
+from surface_gateway.app.utils.bot_filter import is_bot_event
+from surface_gateway.app.utils.security import verify_github_signature
+from surface_gateway.main import app
 
 
 class TestGatewayModule(unittest.TestCase):
@@ -66,7 +66,7 @@ class TestGatewayModule(unittest.TestCase):
             "Content-Type": "application/json",
         }
 
-        with patch("gateway.app.routes.github.publish_event", return_value="evt_123"):
+        with patch("surface_gateway.app.routes.github.publish_event", return_value="evt_123"):
             response = self.client.post(
                 "/webhooks/github",
                 content=body_bytes,
