@@ -38,6 +38,10 @@ class TestCouncilGate(unittest.TestCase):
         )
         self.assertEqual(ctx.state["specifications"]["latest_council_feedback"], "Consolidated revision guide")
         self.assertEqual(len(ctx.state["council_review"]), 1)
+        self.assertEqual(
+            ctx.state["council_review"][0]["council_scores"],
+            {"product_score": 90, "tech_score": 8, "security_score": 95},
+        )
         self.assertEqual(ctx.state["council_review"][0]["product_review"], "Product feedback")
         self.assertEqual(ctx.state["council_review"][0]["tech_review"], "Tech feedback")
         self.assertEqual(ctx.state["council_review"][0]["security_review"], "Security feedback")

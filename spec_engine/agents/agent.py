@@ -134,6 +134,11 @@ async def council_review_gate(node_input: Any, ctx: Context) -> Event:
 
     # Record historical round in council_review list
     history_entry = {
+        "council_scores": {
+            "product_score": product_score,
+            "tech_score": tech_score,
+            "security_score": security_score,
+        },
         "product_review": product_out,
         "tech_review": tech_out,
         "security_review": security_out,
