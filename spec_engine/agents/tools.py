@@ -6,7 +6,6 @@ from google.adk.agents.context import Context
 from google.adk.tools.mcp_tool import McpToolset
 from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
 
-
 from spec_engine.agents.config import config
 
 
@@ -149,5 +148,3 @@ def update_github_issue(
     except Exception as e:
         print(f"[GitHub Error] {e}")
         return {"id": issue_id, "status": "error", "error": str(e)}
-
-

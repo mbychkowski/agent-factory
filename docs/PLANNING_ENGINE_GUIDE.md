@@ -53,7 +53,7 @@ from google.adk.events.event_actions import EventActions
 from google.adk.workflow import START, END
 
 # Import Council Agents
-from agent_engine.agents.directly_responsible_agent import dra_agent
+from agent_engine.agents.directly_responsible_agent import directly_responsible_agent
 from agent_engine.agents.council.product_reviewer import product_reviewer_agent
 from agent_engine.agents.council.tech_reviewer import tech_reviewer_agent
 from agent_engine.agents.council.security_reviewer import security_reviewer_agent
@@ -62,7 +62,9 @@ from agent_engine.agents.council.council_chair import council_chair_agent
 
 async def council_review_gate(node_input: str, ctx: Context) -> Event:
     """Executes Product, Tech Architect, and Security Reviewers in parallel, then aggregates feedback."""
-    spec_draft = ctx.state.get("specifications", {}).get("full_spec_markdown", node_input)
+    spec_draft = ctx.state.get("specifications", {}).get(
+        "full_spec_markdown", node_input
+    )
 
     # 1. Run all 3 Council Members concurrently in parallel via asyncio.gather
     product_res, tech_res, security_res = await asyncio.gather(
@@ -87,13 +89,17 @@ async def council_review_gate(node_input: str, ctx: Context) -> Event:
     chair_response = await council_chair_agent.run(council_payload, ctx=ctx)
 
     # 4. Increment review round counter & update state
-    rounds = ctx.state.setdefault("specifications", {}).get("council_review_rounds", 0) + 1
+    rounds = (
+        ctx.state.setdefault("specifications", {}).get("council_review_rounds", 0) + 1
+    )
     ctx.state["specifications"]["council_review_rounds"] = rounds
-    ctx.state["specifications"]["latest_council_feedback"] = chair_response.output
+    ctx.state["specifications"]["council_notes_summarized"] = chair_response.output
 
     return Event(
         output=chair_response.output,
-        actions=EventActions(state_delta={"latest_council_feedback": chair_response.output})
+        actions=EventActions(
+            state_delta={"council_notes_summarized": chair_response.output}
+        ),
     )
 
 
@@ -102,7 +108,9 @@ def council_loop_router(ctx: Context) -> Event:
     rounds = ctx.state.get("specifications", {}).get("council_review_rounds", 0)
 
     if rounds < 2:
-        print(f"[Council Router] Round {rounds} < 2: Routing back to DRA for revision...")
+        print(
+            f"[Council Router] Round {rounds} < 2: Routing back to DRA for revision..."
+        )
         return Event(actions=EventActions(route="loop_again"))
 
     print(f"[Council Router] Fixed 2 rounds completed. Routing to Human Gate 1...")
@@ -114,26 +122,26 @@ root_workflow = Workflow(
     edges=[
         # Phase 1: Directly Responsible Agent drafts initial spec
         (START, gate_set_session_state),
-        (gate_set_session_state, dra_agent),
-
+        (gate_set_session_state, directly_responsible_agent),
         # Phase 2: Parallel Council Review Loop
-        (dra_agent, council_review_gate),
+        (directly_responsible_agent, council_review_gate),
         (council_review_gate, council_loop_router),
-        (council_loop_router, {
-            "loop_again": dra_agent,
-            "proceed_to_human_gate": human_spec_approval_gate
-        }),
-
+        (
+            council_loop_router,
+            {
+                "loop_again": directly_responsible_agent,
+                "proceed_to_human_gate": human_spec_approval_gate,
+            },
+        ),
         # Phase 3: Human Gate 1 (Pause for Human Review)
-        (human_spec_approval_gate, {
-            "pause_for_human": END,
-            "proceed_to_swarm": swarm_orchestrator_gate
-        }),
-
+        (
+            human_spec_approval_gate,
+            {"pause_for_human": END, "proceed_to_swarm": swarm_orchestrator_gate},
+        ),
         # Phase 4: Swarm Task Decomposition
         (swarm_orchestrator_gate, breakdown_critic),
-        (breakdown_critic, gate_publish_github_epic)
-    ]
+        (breakdown_critic, gate_publish_github_epic),
+    ],
 )
 ```
 

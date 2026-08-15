@@ -14,24 +14,34 @@ from spec_engine.agents.council import (
 )
 from spec_engine.agents.directly_responsible_agent import (
     directly_responsible_agent,
-    dra_agent,
 )
-from spec_engine.agents.tools import (
-    update_github_issue,
-)
+from spec_engine.agents.state import AgentSessionState, ensure_session_state
+from spec_engine.agents.tools import update_github_issue
+
+
+def _extract_dict(val: Any) -> dict[str, Any]:
+    """Safely extracts a dictionary from a Pydantic model or dict."""
+    if hasattr(val, "model_dump"):
+        return val.model_dump()
+    if isinstance(val, dict):
+        return val
+    return {}
 
 
 def _get_issue_id(ctx: Any) -> int | None:
     state = getattr(ctx, "state", {}) if hasattr(ctx, "state") else {}
+    issue_dict = state.get("issue")
     val = state.get("parent_issue_id") or (
-        state.get("issue", {}).get("id") if isinstance(state.get("issue"), dict) else None
+        issue_dict.get("id") if isinstance(issue_dict, dict) else None
     )
     return int(val) if val is not None else None
 
 
-def _get_user_story(ctx: Any) -> str:
+def _get_spec(ctx: Any) -> str:
     state = getattr(ctx, "state", {}) if hasattr(ctx, "state") else {}
-    return str(state.get("user_story_markdown") or "")
+    spec = state.get("specifications")
+    specifications = spec if isinstance(spec, dict) else {}
+    return str(specifications.get("full_spec_markdown") or "")
 
 
 async def _run_agent_helper(agent: Any, input_text: str, ctx: Context) -> str:
@@ -46,93 +56,69 @@ async def _run_agent_helper(agent: Any, input_text: str, ctx: Context) -> str:
 async def gate_set_session_state(node_input: Any, ctx: Context) -> Event:
     """Entry gate that receives input and initializes session state variables."""
     print("Entry Gate: Initializing session state and starting deliberation flow...")
-    initial_state_delta = {
-        "latest_critique_notes": "N/A (Initial Pass)",
-        "latest_missing_elements": "None",
-        "latest_critique_score": 0,
-        "latest_critique_is_approved": False,
-        "user_story_markdown": "",
-        "council_review": [],
-        "specifications": {
-            "full_spec_markdown": "",
-            "revision_summary": "",
-            "story_review_rounds": 0,
-            "council_review_rounds": 0,
-            "council_scores": {
-                "product": 0,
-                "tech": 0,
-                "security": 0,
-            },
-            "council_notes_summarized": "",
-            "latest_council_feedback": "",
-            "council_approved": False,
-        },
-    }
+    initial_state_delta = AgentSessionState().model_dump()
     if hasattr(ctx, "state") and isinstance(ctx.state, dict):
-        for k, v in initial_state_delta.items():
-            ctx.state.setdefault(k, v)
+        ensure_session_state(ctx.state)
 
-    return Event(output=node_input, actions=EventActions(state_delta=initial_state_delta))
+    return Event(
+        output=node_input, actions=EventActions(state_delta=initial_state_delta)
+    )
 
 
 async def council_review_gate(node_input: Any, ctx: Context) -> Event:
     """Executes Product, Tech Architect, and Security Reviewers in parallel, then aggregates feedback via Council Chair."""
     state = getattr(ctx, "state", {}) if hasattr(ctx, "state") else {}
-    specifications = state.setdefault("specifications", {}) if isinstance(state.get("specifications"), dict) else {}
+    ensure_session_state(state)
+    specifications = state.get("specifications", {})
+    if not isinstance(specifications, dict):
+        specifications = {}
 
-    spec_draft = (
-        state.get("user_story_markdown")
-        or specifications.get("full_spec_markdown")
-        or str(node_input)
+    raw_spec = specifications.get("full_spec_markdown")
+    if not raw_spec and hasattr(node_input, "full_spec_markdown"):
+        raw_spec = node_input.full_spec_markdown
+    elif not raw_spec and isinstance(node_input, dict):
+        raw_spec = node_input.get("full_spec_markdown")
+
+    spec_draft = str(raw_spec or node_input or "")
+
+    print(
+        "[Council Review Gate] Executing Product, Tech, and Security Reviewers in parallel..."
     )
-
-    print("[Council Review Gate] Executing Product, Tech, and Security Reviewers in parallel...")
     product_out, tech_out, security_out = await asyncio.gather(
         _run_agent_helper(product_reviewer_agent, spec_draft, ctx=ctx),
         _run_agent_helper(tech_reviewer_agent, spec_draft, ctx=ctx),
         _run_agent_helper(security_reviewer_agent, spec_draft, ctx=ctx),
     )
 
-    # Extract structured results from state
-    product_data = state.get("product_review_result", {}) if isinstance(state.get("product_review_result"), dict) else {}
-    tech_data = state.get("critique_result", {}) if isinstance(state.get("critique_result"), dict) else {}
-    security_data = state.get("security_review_result", {}) if isinstance(state.get("security_review_result"), dict) else {}
-
-    product_score = int(product_data.get("invest_score", 0))
-    tech_score = int(tech_data.get("score", 0))
-    security_score = int(security_data.get("security_score", 0))
-
     council_payload = f"""
 ### Product Reviewer Feedback:
-- INVEST Score: {product_score}/100
-- Approved: {product_data.get('is_approved', False)}
-- User Value Rating: {product_data.get('user_value_rating', 'N/A')}
-- Scope Feedback: {product_data.get('scope_feedback', 'None')}
-- Recommendations: {product_data.get('recommendations', [])}
-- Details: {product_out}
+{product_out}
 
 ### Technical Architect Reviewer Feedback:
-- Tech Score: {tech_score}/10
-- Approved: {tech_data.get('is_approved', False)}
-- Critique Notes: {tech_data.get('critique_notes', 'None')}
-- Missing Elements: {tech_data.get('missing_elements', [])}
-- Details: {tech_out}
+{tech_out}
 
 ### Security & Compliance Reviewer Feedback:
-- Security Score: {security_score}/100
-- Approved: {security_data.get('is_approved', False)}
-- Vulnerability Concerns: {security_data.get('vulnerability_concerns', [])}
-- Compliance Notes: {security_data.get('compliance_notes', 'None')}
-- Recommendations: {security_data.get('recommendations', [])}
-- Details: {security_out}
+{security_out}
 """
 
     print("[Council Review Gate] Synthesizing parallel reviews via Council Chair...")
-    chair_output = await _run_agent_helper(council_chair_agent, council_payload, ctx=ctx)
+    chair_output = await _run_agent_helper(
+        council_chair_agent, council_payload, ctx=ctx
+    )
+
+    # Extract structured results safely supporting Pydantic outputs
+    product_data = _extract_dict(state.get("product_review_result"))
+    tech_data = _extract_dict(state.get("tech_review_result"))
+    security_data = _extract_dict(state.get("security_review_result"))
+    chair_data = _extract_dict(state.get("council_chair_result"))
+
+    product_score = int(product_data.get("invest_score", 0))
+    tech_score = int(tech_data.get("tech_score") or tech_data.get("score") or 0)
+    security_score = int(security_data.get("security_score", 0))
+    council_approved = bool(chair_data.get("overall_approved", False))
 
     rounds = int(specifications.get("council_review_rounds", 0)) + 1
 
-    # Record historical round in council_review list
     history_entry = {
         "council_scores": {
             "product": product_score,
@@ -146,87 +132,82 @@ async def council_review_gate(node_input: Any, ctx: Context) -> Event:
         },
     }
 
-    council_history = state.setdefault("council_review", [])
-    if isinstance(council_history, list):
-        council_history.append(history_entry)
+    council_history = list(state.get("council_review", []))
+    council_history.append(history_entry)
 
-    # Update active snapshot state adhering to Data State Schema in PLANNING_ENGINE_GUIDE.md
-    specifications["council_review_rounds"] = rounds
-    specifications["full_spec_markdown"] = spec_draft
-    specifications["council_notes_summarized"] = chair_output
-    specifications["council_notes"] = chair_output
-    specifications["latest_council_feedback"] = chair_output
-    specifications["council_scores"] = {
-        "product": product_score,
-        "tech": tech_score,
-        "security": security_score,
+    updated_specifications = {
+        **specifications,
+        "council_review_rounds": rounds,
+        "full_spec_markdown": spec_draft,
+        "council_notes_summarized": chair_output,
+        "council_scores": {
+            "product": product_score,
+            "tech": tech_score,
+            "security": security_score,
+        },
+        "council_approved": council_approved,
     }
 
-    # Re-assign top level state for DRA prompt placeholders & state update tracking
-    state["latest_critique_notes"] = chair_output
-    state["latest_critique_score"] = tech_score
-    state["latest_critique_is_approved"] = False
-    state["specifications"] = dict(specifications)
+    state["specifications"] = updated_specifications
+    state["council_review"] = council_history
 
     print(
-        f"[Council Review Gate] Round {rounds} complete. Scores -> Product: {product_score}/100, Tech: {tech_score}/10, Security: {security_score}/100"
+        f"[Council Review Gate] Round {rounds} complete. Scores -> Product: {product_score}/100, Tech: {tech_score}/100, Security: {security_score}/100"
     )
 
     return Event(
         output=chair_output,
         actions=EventActions(
             state_delta={
-                "latest_critique_notes": chair_output,
-                "latest_critique_score": tech_score,
-                "specifications": dict(specifications),
-                "council_review": list(council_history),
+                "specifications": updated_specifications,
+                "council_review": council_history,
             }
         ),
     )
 
 
-def council_loop_router(ctx: Context) -> Event:
-    """Routes back to DRA if rounds < 2, otherwise routes to gate_publish_user_story ('publish')."""
+def council_loop_router(node_input: Any, ctx: Context) -> Event:
+    """Routes back to DRA if rounds < 2, otherwise routes to gate_publish_spec ('publish')."""
     state = getattr(ctx, "state", {}) if hasattr(ctx, "state") else {}
-    specifications = state.get("specifications", {}) if isinstance(state.get("specifications"), dict) else {}
+    spec = state.get("specifications")
+    specifications = spec if isinstance(spec, dict) else {}
     rounds = int(specifications.get("council_review_rounds", 0))
 
     print(f"[Council Router] Completed council review round {rounds} / 2.")
 
     if rounds < 2:
-        print(f"[Council Router] Round {rounds} < 2: Routing back to Directly Responsible Agent for revision...")
+        print(
+            f"[Council Router] Round {rounds} < 2: Routing back to Directly Responsible Agent for revision..."
+        )
         return Event(actions=EventActions(route="loop_again"))
 
-    print(f"[Council Router] Fixed 2 rounds completed. Routing to Publish Gate...")
+    print("[Council Router] Fixed 2 rounds completed. Routing to Publish Gate...")
     return Event(actions=EventActions(route="publish"))
 
 
-async def gate_publish_user_story(ctx: Context) -> Event:
-    """Updates main issue description on GitHub with the refined user story."""
-    await asyncio.sleep(4)
-
+async def gate_publish_spec(node_input: Any, ctx: Context) -> Event:
+    """Updates main issue description on GitHub with the refined specification."""
     parent_id = _get_issue_id(ctx)
     if not parent_id:
         print("Gate Evaluating: Parent Issue ID not found. Finishing turn.")
         return Event()
 
-    user_story = _get_user_story(ctx)
-    if not user_story:
-        raise ValueError("User Story content missing from session state when attempting to publish to GitHub.")
+    spec_markdown = _get_spec(ctx)
+    if not spec_markdown:
+        raise ValueError(
+            "Specification content missing from session state when attempting to publish to GitHub."
+        )
 
     try:
-        update_github_issue(issue_id=int(parent_id), body=user_story, ctx=ctx)
+        update_github_issue(issue_id=int(parent_id), body=spec_markdown, ctx=ctx)
         print(
-            f"[DRA Gate] Automatically updated main GitHub Issue #{parent_id} description with certified User Story."
+            f"[DRA Gate] Automatically updated main GitHub Issue #{parent_id} description with certified Specification."
         )
     except Exception as e:
         print(f"[DRA Gate Warning] Could not auto-update issue #{parent_id}: {e}")
 
-    return Event(output=f"User Story Issue #{parent_id} refined.")
+    return Event(output=f"Specification Issue #{parent_id} refined.")
 
-
-# Backwards compatibility alias for loop_router
-loop_router = council_loop_router
 
 root_workflow = Workflow(
     name="agile_github_planning_app",
@@ -239,7 +220,7 @@ root_workflow = Workflow(
             council_loop_router,
             {
                 "loop_again": directly_responsible_agent,
-                "publish": gate_publish_user_story,
+                "publish": gate_publish_spec,
             },
         ),
     ],

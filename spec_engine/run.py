@@ -79,18 +79,23 @@ async def run_workflow(input_path: str, output_path: str):
         app_name=runner.app_name, user_id=user_id, session_id=session_id
     )
 
-    # Extract our generated user story
     state = getattr(session, "state", {}) if session else {}
-    user_story = state.get("user_story_markdown") or "No user story was generated."
-
+    specifications = state.get("specifications", {}) if isinstance(state, dict) or hasattr(state, "get") else {}
+    full_spec = (
+        specifications.get("full_spec_markdown")
+        if isinstance(specifications, dict) or hasattr(specifications, "get")
+        else None
+    )
+    if not full_spec:
+        full_spec = "No specification was generated."
 
     # Compile the final specification document
-    compiled_spec = f"""# Certified User Story & Specification
+    compiled_spec = f"""# Certified Specification
 *Generated automatically by Spec Deliberator Agent*
 
 ---
 
-{user_story}
+{full_spec}
 """
 
     # Write output to file

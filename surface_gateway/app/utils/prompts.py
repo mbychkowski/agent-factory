@@ -21,11 +21,15 @@ def build_agent_interaction_prompt(
             f"<user_input>\n{content_text}\n</user_input>"
         )
 
-    raw_payload = raw_payload or {}
-    issue_data = raw_payload.get("issue", {}) if isinstance(raw_payload, dict) else {}
+    raw_dict = raw_payload if isinstance(raw_payload, dict) else {}
+    issue_data = (
+        raw_dict.get("issue") if isinstance(raw_dict.get("issue"), dict) else {}
+    )
     issue_title = issue_data.get("title", "") if isinstance(issue_data, dict) else ""
 
-    issue_context_str = f"Issue #{issue_id} ({issue_title})" if issue_title else f"Issue #{issue_id}"
+    issue_context_str = (
+        f"Issue #{issue_id} ({issue_title})" if issue_title else f"Issue #{issue_id}"
+    )
 
     return (
         f"### GitHub Interaction Event Context\n"
@@ -34,4 +38,3 @@ def build_agent_interaction_prompt(
         f"### Human User Input\n"
         f"<user_input>\n{content_text.strip()}\n</user_input>"
     )
-

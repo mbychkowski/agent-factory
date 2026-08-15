@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any
 
 
 def is_bot_event(payload: dict[str, Any]) -> bool:

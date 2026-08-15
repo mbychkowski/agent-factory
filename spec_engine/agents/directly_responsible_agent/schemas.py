@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 
-class UserStoryOutput(BaseModel):
-    user_story_markdown: str = Field(
-        description="Finalized, comprehensive User Story formatted in Markdown adhering strictly to INVEST and BDD standards."
+class SpecOutput(BaseModel):
+    full_spec_markdown: str = Field(
+        description="Finalized, comprehensive specification formatted in Markdown adhering strictly to INVEST and BDD standards."
     )

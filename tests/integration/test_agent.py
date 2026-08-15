@@ -23,7 +23,6 @@ from spec_engine.app.agent import root_agent
 
 
 class TestAgentIntegration(unittest.TestCase):
-
     def test_agent_stream(self) -> None:
         """
         Integration test for the agent stream functionality.
@@ -32,8 +31,12 @@ class TestAgentIntegration(unittest.TestCase):
 
         session_service = InMemorySessionService()
 
-        session = session_service.create_session_sync(user_id="test_user", app_name="test")
-        runner = Runner(agent=root_agent, session_service=session_service, app_name="test")
+        session = session_service.create_session_sync(
+            user_id="test_user", app_name="test"
+        )
+        runner = Runner(
+            agent=root_agent, session_service=session_service, app_name="test"
+        )
 
         message = types.Content(
             role="user", parts=[types.Part.from_text(text="Why is the sky blue?")]
@@ -58,9 +61,10 @@ class TestAgentIntegration(unittest.TestCase):
             ):
                 has_text_content = True
                 break
-        self.assertTrue(has_text_content, "Expected at least one message with text content")
+        self.assertTrue(
+            has_text_content, "Expected at least one message with text content"
+        )
 
 
 if __name__ == "__main__":
     unittest.main()
-

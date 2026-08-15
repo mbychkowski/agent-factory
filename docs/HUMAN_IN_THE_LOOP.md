@@ -99,25 +99,26 @@ In ADK, pausing for human input is managed through **Session State persistence**
 from google.adk import Event
 from google.adk.events.event_actions import EventActions
 
+
 async def human_spec_approval_gate(node_input: str, ctx: Context) -> Event:
     """Pauses the ADK workflow and notifies external surfaces for human approval."""
-    
+
     # Check if human approval was already received via webhook
     if ctx.state.get("human_spec_approved") is True:
         print("[Gate] Human approval confirmed! Proceeding to Swarm Decomposition...")
         return Event(actions=EventActions(route="proceed_to_swarm"))
-    
+
     # Otherwise, publish summary to multi-surface gateway and pause workflow
     summary_card = format_multi_surface_card(ctx.state["specifications"])
     await notify_gateway_surfaces(summary_card, ctx=ctx)
-    
+
     # Mark state as awaiting human input
     return Event(
         output="Awaiting human approval on GitHub/Slack/Gemini Enterprise.",
         actions=EventActions(
             state_delta={"workflow_status": "AWAITING_HUMAN_APPROVAL"},
-            route="pause_for_human"
-        )
+            route="pause_for_human",
+        ),
     )
 ```
 

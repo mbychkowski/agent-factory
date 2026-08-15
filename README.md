@@ -40,10 +40,10 @@ The Spec Deliberator Agent is built to run as a multi-tenant GitHub App service 
    * The agent does not rely on local container disk code. When processing a webhook from `acme/web-app`, the agent uses the GitHub Code Search API with a scoped Installation Access Token to search the target repository dynamically over HTTPS.
 2. **Structured Domain State Model (`ctx.state`):**
    * **`issue`**: Stores target repository metadata (`id`, `title`, `author`, `url`, `repo`).
-   * **`specifications`**: Stores current story drafts (`user_story_markdown`), peer review approval status, and audit history (`critique_history`).
+   * **`specifications`**: Stores current specification drafts (`full_spec_markdown`), council review rounds, scores, and audit log.
    * **`comments`**: Captures delta comments across surfaces (GitHub, Slack, Discord).
 3. **Native Google ADK Skills Framework (`SkillToolset`):**
-   * Uses ADK's native `load_skill_from_dir` and `SkillToolset` ([`user-story-best-practices/SKILL.md`](spec_engine/skills/user-story-best-practices/SKILL.md)).
+   * Uses ADK's native `load_skill_from_dir` and `SkillToolset` ([`agent-spec-standards/SKILL.md`](spec_engine/skills/agent-spec-standards/SKILL.md)).
    * Instructions are loaded on demand via tool calls (`load_skill`), keeping system prompt context overhead extremely low.
 
 ---

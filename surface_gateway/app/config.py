@@ -20,15 +20,24 @@ class GatewayConfig:
 
     @property
     def google_cloud_location(self) -> str:
-        return os.environ.get("GOOGLE_CLOUD_LOCATION", os.environ.get("DEFAULT_GOOGLE_CLOUD_LOCATION", "us-east1"))
+        return os.environ.get(
+            "GOOGLE_CLOUD_LOCATION",
+            os.environ.get("DEFAULT_GOOGLE_CLOUD_LOCATION", "us-east1"),
+        )
 
     @property
     def cloud_tasks_location(self) -> str:
-        return os.environ.get("GOOGLE_CLOUD_LOCATION", os.environ.get("CLOUD_TASKS_LOCATION", "us-east1"))
+        return os.environ.get(
+            "GOOGLE_CLOUD_LOCATION", os.environ.get("CLOUD_TASKS_LOCATION", "us-east1")
+        )
 
     @property
     def enable_cloud_tasks(self) -> bool:
-        return os.environ.get("ENABLE_CLOUD_TASKS", "true").lower() in ("true", "1", "yes")
+        return os.environ.get("ENABLE_CLOUD_TASKS", "true").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
 
     @property
     def cloud_run_gateway_url(self) -> str:
@@ -36,11 +45,17 @@ class GatewayConfig:
 
     @property
     def reasoning_engine_id(self) -> str:
-        return os.environ.get("REASONING_ENGINE_ID", "projects/885745030124/locations/us-east1/reasoningEngines/4685520423255801856")
+        return os.environ.get(
+            "REASONING_ENGINE_ID",
+            "projects/885745030124/locations/us-east1/reasoningEngines/4685520423255801856",
+        )
 
     @property
     def reasoning_engine_location(self) -> str:
-        return os.environ.get("GOOGLE_CLOUD_LOCATION", os.environ.get("REASONING_ENGINE_LOCATION", "us-east1"))
+        return os.environ.get(
+            "GOOGLE_CLOUD_LOCATION",
+            os.environ.get("REASONING_ENGINE_LOCATION", "us-east1"),
+        )
 
     @property
     def cloud_tasks_service_account(self) -> str:
@@ -51,5 +66,3 @@ class GatewayConfig:
 
 
 config = GatewayConfig()
-
-

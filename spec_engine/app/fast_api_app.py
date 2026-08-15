@@ -34,7 +34,6 @@ from spec_engine.app.app_utils.telemetry import (
     setup_telemetry,
 )
 from spec_engine.app.app_utils.typing import Feedback
-
 from spec_engine.app.config import config
 
 setup_telemetry()

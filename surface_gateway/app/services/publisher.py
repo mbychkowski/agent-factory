@@ -7,7 +7,9 @@ from surface_gateway.app.schemas.events import HumanInteractionEvent
 logger = logging.getLogger(__name__)
 
 
-async def publish_event(event: HumanInteractionEvent, base_url: str | None = None) -> bool:
+async def publish_event(
+    event: HumanInteractionEvent, base_url: str | None = None
+) -> bool:
     """
     Publishes the normalized HumanInteractionEvent to Cloud Tasks queue in production,
     or falls back to Pub/Sub or local direct HTTP forwarding.
@@ -25,8 +27,14 @@ async def publish_event(event: HumanInteractionEvent, base_url: str | None = Non
                 config.cloud_tasks_queue_id,
             )
 
-            resolved_gateway_url = config.cloud_run_gateway_url or base_url or "http://localhost:8080"
-            if resolved_gateway_url.startswith("http://") and "localhost" not in resolved_gateway_url and "127.0.0.1" not in resolved_gateway_url:
+            resolved_gateway_url = (
+                config.cloud_run_gateway_url or base_url or "http://localhost:8080"
+            )
+            if (
+                resolved_gateway_url.startswith("http://")
+                and "localhost" not in resolved_gateway_url
+                and "127.0.0.1" not in resolved_gateway_url
+            ):
                 resolved_gateway_url = "https://" + resolved_gateway_url[7:]
 
             target_url = f"{resolved_gateway_url.rstrip('/')}/tasks/execute-agent-turn"
@@ -56,13 +64,21 @@ async def publish_event(event: HumanInteractionEvent, base_url: str | None = Non
             try:
                 task_with_name = dict(task)
                 task_with_name["name"] = task_name
-                created_task = client.create_task(request={"parent": parent, "task": task_with_name})
+                created_task = client.create_task(
+                    request={"parent": parent, "task": task_with_name}
+                )
             except Exception as name_err:
                 if "ALREADY_EXISTS" in str(name_err) or "409" in str(name_err):
-                    logger.info(f"Task already enqueued for event {event.event_id} (deduplicated).")
+                    logger.info(
+                        f"Task already enqueued for event {event.event_id} (deduplicated)."
+                    )
                     return True
-                logger.warning(f"Creating task with custom name failed ({name_err}). Retrying without custom task name...")
-                created_task = client.create_task(request={"parent": parent, "task": task})
+                logger.warning(
+                    f"Creating task with custom name failed ({name_err}). Retrying without custom task name..."
+                )
+                created_task = client.create_task(
+                    request={"parent": parent, "task": task}
+                )
 
             logger.info(
                 f"Enqueued task {created_task.name} to Cloud Tasks queue {config.cloud_tasks_queue_id} -> {target_url}"
@@ -71,7 +87,9 @@ async def publish_event(event: HumanInteractionEvent, base_url: str | None = Non
 
         except Exception as e:
             if "ALREADY_EXISTS" in str(e) or "409" in str(e):
-                logger.info(f"Task already enqueued for event {event.event_id} (deduplicated).")
+                logger.info(
+                    f"Task already enqueued for event {event.event_id} (deduplicated)."
+                )
                 return True
             logger.error(f"Failed to enqueue task to Cloud Tasks: {e}")
             return False
@@ -92,8 +110,12 @@ async def publish_event(event: HumanInteractionEvent, base_url: str | None = Non
                 },
                 timeout=10.0,
             )
-            logger.info(f"Local Direct Mode: Forwarded event {event.event_id} to {url} (status: {response.status_code})")
+            logger.info(
+                f"Local Direct Mode: Forwarded event {event.event_id} to {url} (status: {response.status_code})"
+            )
             return response.status_code in (200, 201, 202)
     except Exception as e:
-        logger.warning(f"Local Direct Mode: Agent API not reachable at {config.agent_api_url} ({e}). Event queued/logged.")
+        logger.warning(
+            f"Local Direct Mode: Agent API not reachable at {config.agent_api_url} ({e}). Event queued/logged."
+        )
         return True

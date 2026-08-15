@@ -1,46 +1,81 @@
-from typing import Optional
+"""Directly Responsible Agent (DRA) definition for spec drafting and refinement."""
+
+from typing import Any
 
 from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.genai import types
 
 from spec_engine.agents.config import config
+from spec_engine.agents.state import ensure_session_state
 from spec_engine.agents.tools import get_github_mcp_toolset
-from spec_engine.skills.skills import user_story_skill_toolset
+from spec_engine.skills.skills import agent_spec_skill_toolset
 
 from .prompt import get_prompt
-from .schemas import UserStoryOutput
+from .schemas import SpecOutput
 
 
-async def init_refiner_state_callback(
+async def init_state_callback(
     callback_context: CallbackContext,
 ) -> None:
-    """Callback executed before user_story_refiner agent runs.
+    """Callback executed before directly_responsible_agent runs.
 
-    Ensures default values for prompt state placeholders exist in session state.
+    Ensures default values for prompt state placeholders exist in session state,
+    leveraging AgentSessionState Pydantic schema as the single source of truth.
     """
-    callback_context.state.setdefault("latest_critique_notes", "N/A (Initial Pass)")
-    callback_context.state.setdefault("latest_missing_elements", "None")
-    callback_context.state.setdefault("latest_critique_score", 0)
-    callback_context.state.setdefault("latest_critique_is_approved", False)
-    callback_context.state.setdefault("user_story_markdown", "")
+    ensure_session_state(callback_context.state)
 
 
-async def save_user_story_callback(
+def get_instruction(ctx: Any) -> str:
+    """Dynamic instruction provider that safely injects state variables from specifications state."""
+    state = getattr(ctx, "state", {}) if hasattr(ctx, "state") else {}
+    specifications = state.get("specifications", {}) if isinstance(state, dict) else {}
+
+    full_spec = (
+        specifications.get("full_spec_markdown", "")
+        if isinstance(specifications, dict)
+        else ""
+    )
+    council_notes = (
+        specifications.get("council_notes_summarized", "N/A (Initial Pass)")
+        if isinstance(specifications, dict)
+        else "N/A (Initial Pass)"
+    )
+
+    # Use explicit string replacements to prevent KeyError / ValueError
+    # when markdown contains arbitrary braces/JSON/code blocks
+    prompt_template = get_prompt()
+    return (
+        prompt_template.replace("{full_spec_markdown}", full_spec)
+        .replace("{council_notes_summarized}", council_notes)
+    )
+
+
+async def save_spec_callback(
     callback_context: CallbackContext,
-) -> Optional[types.Content]:
-    """Callback executed after user_story_refiner agent finishes execution.
+) -> types.Content | None:
+    """Callback executed after directly_responsible_agent finishes execution."""
+    raw_data = callback_context.state.get("spec_result")
 
-    Extracts user_story_markdown from the structured result and saves it in session state.
-    """
-    data = callback_context.state.get("user_story_result", {})
-    markdown_text = ""
-    if isinstance(data, dict):
-        markdown_text = str(data.get("user_story_markdown", ""))
-    elif hasattr(data, "user_story_markdown"):
-        markdown_text = str(getattr(data, "user_story_markdown", ""))
+    if isinstance(raw_data, SpecOutput):
+        markdown_text = raw_data.full_spec_markdown
+    elif hasattr(raw_data, "model_dump"):
+        markdown_text = str(raw_data.model_dump().get("full_spec_markdown", ""))
+    elif isinstance(raw_data, dict):
+        markdown_text = str(raw_data.get("full_spec_markdown", ""))
+    else:
+        markdown_text = ""
 
-    callback_context.state["user_story_markdown"] = markdown_text
+    ensure_session_state(callback_context.state)
+    specifications = callback_context.state.get("specifications")
+    specs_dict = specifications if isinstance(specifications, dict) else {}
+
+    updated_specs = {
+        **specs_dict,
+        "full_spec_markdown": markdown_text,
+    }
+    callback_context.state["specifications"] = updated_specs
+
     return None
 
 
@@ -48,18 +83,18 @@ directly_responsible_agent = LlmAgent(
     name="directly_responsible_agent",
     model=config.model,
     description="Directly Responsible Agent (DRA) and Lead Spec Author responsible for drafting and refining technical specifications.",
-    instruction=get_prompt(),
-    before_agent_callback=init_refiner_state_callback,
+    instruction=get_instruction,
+    before_agent_callback=init_state_callback,
     tools=[
-        user_story_skill_toolset,
+        agent_spec_skill_toolset,
         get_github_mcp_toolset(
             toolsets="issues,repos",
             allowed_tools=["search_code", "get_issue"],
         ),
     ],
-    output_schema=UserStoryOutput,
-    output_key="user_story_result",
-    after_agent_callback=save_user_story_callback,
+    output_schema=SpecOutput,
+    output_key="spec_result",
+    after_agent_callback=save_spec_callback,
 )
 
 root_agent = directly_responsible_agent
