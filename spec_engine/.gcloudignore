@@ -1,0 +1,2 @@
+# Explicitly unignore private key for gcloud / agents-cli builds
+!agent-factory-private-key.pem

@@ -12,7 +12,7 @@ Evaluate the drafted specification to ensure it is technically feasible, archite
 ```
 
 - Do NOT consider previous iterations, past conversation history, or external assumptions outside of this exact User Story Markdown.
-- You may use the `search_code` tool as needed to verify technical feasibility against the target codebase.
+- You may use the provided repository inspection tools as needed to verify technical feasibility against the target codebase.
 
 ### Quality Standard & Skill Lookup:
 You have access to the `agent-spec-standards` and `github-markdown-formatting` skills.

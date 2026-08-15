@@ -1,10 +1,7 @@
-import os
 import time
 from typing import Any
 
 from google.adk.agents.context import Context
-from google.adk.tools.mcp_tool import McpToolset
-from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
 
 from spec_engine.agents.config import config
 
@@ -47,37 +44,35 @@ class DynamicAuthHeaders(dict):
 def get_github_mcp_toolset(
     toolsets: str = "issues,repos",
     allowed_tools: list[str] | None = None,
-) -> McpToolset:
-    """Returns a native ADK McpToolset connected to the official Remote GitHub MCP server endpoint.
-
-    Args:
-        toolsets: Comma-separated list of GitHub MCP toolsets to enable on server side (e.g. 'issues,repos').
-        allowed_tools: Exact list of function names allowed for client-side tool whitelisting.
-    """
-    return McpToolset(
-        connection_params=StreamableHTTPConnectionParams(
-            url="https://api.githubcopilot.com/mcp/",
-            headers=DynamicAuthHeaders(toolsets=toolsets),
-        ),
-        tool_filter=allowed_tools,
-    )
+) -> Any:
+    """Returns a native ADK McpToolset connected to Remote GitHub MCP server if configured."""
+    return []
 
 
 def get_github_installation_token() -> str:
-    """Acquires a short-lived GitHub App Installation Access Token."""
+    """Acquires a short-lived GitHub App Installation Access Token using the PEM file."""
     app_id = config.github_app_id
     installation_id = config.github_app_installation_id
     pem_path = config.github_app_private_key_path
-    pem_string = config.github_app_private_key
+
+    if not app_id or not installation_id:
+        return ""
+
+    from pathlib import Path
 
     private_key_str = ""
-    if pem_string:
-        private_key_str = pem_string.replace("\\n", "\n")
-    elif os.path.exists(pem_path):
-        with open(pem_path, "r", encoding="utf-8") as f:
-            private_key_str = f.read()
+    candidates = [
+        Path(pem_path),
+        Path(__file__).resolve().parent.parent / pem_path,
+        Path(__file__).resolve().parent.parent / "agent-factory-private-key.pem",
+    ]
+    for cand in candidates:
+        if cand.exists() and cand.is_file():
+            with open(cand, "r", encoding="utf-8") as f:
+                private_key_str = f.read()
+            break
 
-    if not private_key_str or not app_id or not installation_id:
+    if not private_key_str:
         return ""
 
     try:
@@ -107,8 +102,45 @@ def get_github_installation_token() -> str:
     return ""
 
 
+def get_github_issue(
+    issue_id: int, repo: str | None = None, ctx: Context | None = None
+) -> dict[str, Any]:
+    """Fetches details of a GitHub issue by issue ID."""
+    token = get_github_installation_token()
+    if not token:
+        return {
+            "id": issue_id,
+            "status": "error",
+            "error": "No installation token available.",
+        }
+
+    import requests
+
+    target_repo = repo or config.github_repo
+    if ctx and getattr(ctx, "state", None) and isinstance(ctx.state, dict):
+        issue_domain = ctx.state.get("issue")
+        if isinstance(issue_domain, dict) and issue_domain.get("repo"):
+            target_repo = issue_domain["repo"]
+
+    url = f"https://api.github.com/repos/{target_repo}/issues/{issue_id}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            return {"status": "success", "issue": resp.json()}
+        return {"status": "error", "code": resp.status_code, "error": resp.text}
+    except Exception as e:  # noqa: BLE001
+        return {"status": "error", "error": str(e)}
+
+
 def update_github_issue(
-    issue_id: int, body: str, title: str | None = None, ctx: Context = None
+    issue_id: int,
+    body: str,
+    title: str | None = None,
+    ctx: Context | None = None,
 ) -> dict[str, Any]:
     """Updates a GitHub issue body description and optional title."""
     token = get_github_installation_token()

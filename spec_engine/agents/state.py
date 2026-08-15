@@ -81,7 +81,11 @@ def ensure_session_state(raw_state: Any) -> Any:
     dumped = validated.model_dump()
 
     # Mutates raw_state in place to register updates with ADK state managers or dicts
-    if hasattr(raw_state, "update") and callable(raw_state.update) or isinstance(raw_state, dict):
+    if (
+        hasattr(raw_state, "update")
+        and callable(raw_state.update)
+        or isinstance(raw_state, dict)
+    ):
         raw_state.update(dumped)
     elif hasattr(raw_state, "__setitem__"):
         for k, v in dumped.items():

@@ -82,7 +82,11 @@ async def run_workflow(input_path: str, output_path: str):
     )
 
     state = getattr(session, "state", {}) if session else {}
-    specifications = state.get("specifications", {}) if isinstance(state, dict) or hasattr(state, "get") else {}
+    specifications = (
+        state.get("specifications", {})
+        if isinstance(state, dict) or hasattr(state, "get")
+        else {}
+    )
     full_spec = (
         specifications.get("full_spec_markdown")
         if isinstance(specifications, dict) or hasattr(specifications, "get")

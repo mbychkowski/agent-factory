@@ -44,12 +44,26 @@ def _get_spec(ctx: Any) -> str:
     return str(specifications.get("full_spec_markdown") or "")
 
 
-async def _run_agent_helper(agent: Any, input_text: str, ctx: Context) -> str:
+from google.genai import types
+
+
+async def _run_agent_helper(agent: Any, input_text: str, parent_ctx: Any = None) -> str:
     """Helper to run an ADK agent asynchronously and return final output string."""
     last_output = ""
-    async for event in agent.run_async(input_text, ctx=ctx):
-        if hasattr(event, "output") and event.output:
-            last_output = str(event.output)
+    if parent_ctx and hasattr(parent_ctx, "model_copy"):
+        user_content = (
+            types.Content(parts=[types.Part(text=input_text)])
+            if isinstance(input_text, str)
+            else input_text
+        )
+        sub_ctx = parent_ctx.model_copy(update={"user_content": user_content})
+        async for event in agent.run_async(sub_ctx):
+            if hasattr(event, "output") and event.output:
+                last_output = str(event.output)
+            elif hasattr(event, "content") and event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        last_output += part.text
     return last_output
 
 
@@ -85,9 +99,9 @@ async def council_review_gate(node_input: Any, ctx: Context) -> Event:
         "[Council Review Gate] Executing Product, Tech, and Security Reviewers in parallel..."
     )
     product_out, tech_out, security_out = await asyncio.gather(
-        _run_agent_helper(product_reviewer_agent, spec_draft, ctx=ctx),
-        _run_agent_helper(tech_reviewer_agent, spec_draft, ctx=ctx),
-        _run_agent_helper(security_reviewer_agent, spec_draft, ctx=ctx),
+        _run_agent_helper(product_reviewer_agent, spec_draft, parent_ctx=ctx),
+        _run_agent_helper(tech_reviewer_agent, spec_draft, parent_ctx=ctx),
+        _run_agent_helper(security_reviewer_agent, spec_draft, parent_ctx=ctx),
     )
 
     council_payload = f"""
@@ -103,7 +117,7 @@ async def council_review_gate(node_input: Any, ctx: Context) -> Event:
 
     print("[Council Review Gate] Synthesizing parallel reviews via Council Chair...")
     chair_output = await _run_agent_helper(
-        council_chair_agent, council_payload, ctx=ctx
+        council_chair_agent, council_payload, parent_ctx=ctx
     )
 
     # Extract structured results safely supporting Pydantic outputs

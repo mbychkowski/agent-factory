@@ -16,6 +16,7 @@ dependencies = [
     "fastapi>=0.110.0",
     "uvicorn>=0.28.0",
     "pydantic>=2.6.0",
+    "requests>=2.31.0",
 ]
 [project.optional-dependencies]
 eval = [
@@ -52,6 +53,9 @@ ignore = ["E501", "C901"]
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-dir]
+spec_engine = "."
 
 [tool.setuptools.packages.find]
 where = ["."]

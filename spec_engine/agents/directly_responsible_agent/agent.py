@@ -8,7 +8,6 @@ from google.genai import types
 
 from spec_engine.agents.config import config
 from spec_engine.agents.state import ensure_session_state
-from spec_engine.agents.tools import get_github_mcp_toolset
 from spec_engine.skills.skills import agent_spec_skill_toolset
 
 from .prompt import get_prompt
@@ -45,9 +44,8 @@ def get_instruction(ctx: Any) -> str:
     # Use explicit string replacements to prevent KeyError / ValueError
     # when markdown contains arbitrary braces/JSON/code blocks
     prompt_template = get_prompt()
-    return (
-        prompt_template.replace("{full_spec_markdown}", full_spec)
-        .replace("{council_notes_summarized}", council_notes)
+    return prompt_template.replace("{full_spec_markdown}", full_spec).replace(
+        "{council_notes_summarized}", council_notes
     )
 
 
@@ -79,19 +77,15 @@ async def save_spec_callback(
     return None
 
 
+dra_tools = [agent_spec_skill_toolset]
+
 directly_responsible_agent = LlmAgent(
     name="directly_responsible_agent",
     model=config.model,
     description="Directly Responsible Agent (DRA) and Lead Spec Author responsible for drafting and refining technical specifications.",
     instruction=get_instruction,
     before_agent_callback=init_state_callback,
-    tools=[
-        agent_spec_skill_toolset,
-        get_github_mcp_toolset(
-            toolsets="issues,repos",
-            allowed_tools=["search_code", "get_issue"],
-        ),
-    ],
+    tools=dra_tools,
     output_schema=SpecOutput,
     output_key="spec_result",
     after_agent_callback=save_spec_callback,

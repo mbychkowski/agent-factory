@@ -71,8 +71,14 @@ def setup_agent_engine_telemetry() -> None:
     if not config.enable_telemetry:
         return
 
-    import google.auth
-    from vertexai.agent_engines.templates.adk import _default_instrumentor_builder
+    try:
+        import google.auth
+        from vertexai.agent_engines.templates.adk import _default_instrumentor_builder
 
-    _, project_id = google.auth.default()
-    _default_instrumentor_builder(project_id, enable_tracing=True, enable_logging=True)
+        _, project_id = google.auth.default()
+        if project_id:
+            _default_instrumentor_builder(
+                project_id, enable_tracing=True, enable_logging=True
+            )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Failed to setup agent engine telemetry: %s", e)

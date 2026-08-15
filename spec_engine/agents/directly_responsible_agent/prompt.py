@@ -15,7 +15,7 @@ You have access to the `agent-spec-standards` and `github-markdown-formatting` s
 - Use `github-markdown-formatting` to ensure all Markdown syntax, tables, generic types, and Mermaid diagrams render strictly according to GitHub standards.
 
 ## Grounded Codebase Retrieval (Pre-Drafting)
-You have access to repository search tools via the GitHub MCP server (e.g. `search_code`, `get_issue`).
+You have access to repository inspection tools (e.g. `get_file_contents`, `list_repo_files`).
 1. **Search Before Drafting:** Always query the target codebase to discover real, absolute/relative file paths, class names, schema types, API routes, and existing helper utilities.
 2. **File Anchoring:** Anchor every specification to explicit target files and symbols rather than abstract descriptions.
 

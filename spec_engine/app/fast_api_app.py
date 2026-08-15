@@ -39,9 +39,14 @@ setup_telemetry()
 
 # Must run before get_fast_api_app to set the tracer provider resource.
 setup_agent_engine_telemetry()
-_, project_id = google.auth.default()
-logging_client = google_cloud_logging.Client()
-logger = logging_client.logger(__name__)
+try:
+    _, project_id = google.auth.default()
+    logging_client = google_cloud_logging.Client()
+    logger = logging_client.logger(__name__)
+except Exception:  # noqa: BLE001
+    import logging
+
+    logger = logging.getLogger(__name__)
 allow_origins = config.allow_origins or None
 
 AGENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -102,7 +107,11 @@ def collect_feedback(feedback: Feedback) -> dict[str, str]:
     Returns:
         Success message
     """
-    logger.log_struct(feedback.model_dump(), severity="INFO")
+    log_struct_fn = getattr(logger, "log_struct", None)
+    if callable(log_struct_fn):
+        log_struct_fn(feedback.model_dump(), severity="INFO")
+    else:
+        logger.info("Feedback received: %s", feedback.model_dump())
     return {"status": "success"}
 
 

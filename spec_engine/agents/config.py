@@ -1,8 +1,12 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    load_dotenv(dotenv_path=_env_path)
 
 
 class AgentsConfig:
@@ -33,14 +37,15 @@ class AgentsConfig:
 
     @property
     def github_app_private_key_path(self) -> str:
-        return os.environ.get(
+        raw_path = os.environ.get(
             "GITHUB_APP_PRIVATE_KEY_PATH",
-            "./private-key.pem",
+            "./agent-factory-private-key.pem",
         )
-
-    @property
-    def github_app_private_key(self) -> str:
-        return os.environ.get("GITHUB_APP_PRIVATE_KEY", "")
+        p = Path(raw_path)
+        if not p.is_absolute():
+            base_dir = Path(__file__).resolve().parent.parent
+            p = base_dir / raw_path
+        return str(p)
 
     @property
     def github_repo(self) -> str:

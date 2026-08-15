@@ -22,7 +22,7 @@ registration.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from a2a.server.apps import A2AFastAPIApplication
 from a2a.server.request_handlers import DefaultRequestHandler
@@ -37,7 +37,6 @@ from google.adk.a2a.utils.agent_card_builder import AgentCardBuilder
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
-    from google.adk.agents import BaseAgent
     from google.adk.runners import Runner
 
 # URI advertised on the agent card describing the executor extension shipped
@@ -93,7 +92,7 @@ def _resolve_app_url(app_url: str | None) -> str:
 async def attach_a2a_routes(
     app: FastAPI,
     *,
-    agent: BaseAgent,
+    agent: Any,
     runner: Runner,
     task_store: TaskStore,
     rpc_path: str,

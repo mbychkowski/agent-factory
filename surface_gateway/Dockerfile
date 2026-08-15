@@ -22,6 +22,7 @@ WORKDIR /app
 
 # Copy dependencies and application source
 COPY --from=builder /install /usr/local/lib/python3.12/site-packages/
+COPY --from=builder /install/bin* /usr/local/bin/
 COPY . /app/surface_gateway
 
 # Environment configuration
@@ -33,4 +34,4 @@ USER appuser
 
 EXPOSE 8080
 
-CMD ["uvicorn", "surface_gateway.main:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips=*"]
+CMD ["python", "-m", "uvicorn", "surface_gateway.main:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips=*"]
