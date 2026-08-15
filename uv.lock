@@ -2599,6 +2599,7 @@ source = { editable = "surface_gateway" }
 dependencies = [
     { name = "fastapi" },
     { name = "google-cloud-aiplatform" },
+    { name = "google-cloud-logging" },
     { name = "google-cloud-tasks" },
     { name = "httpx" },
     { name = "pydantic" },
@@ -2610,6 +2611,7 @@ dependencies = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.110.0" },
     { name = "google-cloud-aiplatform", specifier = ">=1.60.0" },
+    { name = "google-cloud-logging", specifier = ">=3.10.0" },
     { name = "google-cloud-tasks", specifier = ">=2.16.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "pydantic", specifier = ">=2.6.0" },

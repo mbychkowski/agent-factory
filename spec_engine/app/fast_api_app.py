@@ -18,7 +18,6 @@ from collections.abc import AsyncIterator
 
 import google.auth
 from a2a.server.tasks import InMemoryTaskStore
-from dotenv import load_dotenv
 from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
 from google.adk.runners import Runner

@@ -102,7 +102,7 @@ def get_github_installation_token() -> str:
         )
         if resp.status_code in (200, 201):
             return resp.json().get("token", "")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"[GitHub Auth Warning] Could not obtain installation token: {e}")
     return ""
 
@@ -145,6 +145,6 @@ def update_github_issue(
             }
         print(f"[GitHub Error {resp.status_code}] {resp.text}")
         return {"id": issue_id, "status": "error", "error": resp.text}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"[GitHub Error] {e}")
         return {"id": issue_id, "status": "error", "error": str(e)}

@@ -28,7 +28,7 @@ async def github_webhook(
 
     try:
         payload: dict[str, Any] = await request.json()
-    except Exception:
+    except Exception:  # noqa: BLE001
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     # 2. Filter out Bot Self-Loops
@@ -49,7 +49,13 @@ async def github_webhook(
     normalized_event = github_adapter.parse_and_normalize(payload, x_github_event)
 
     # 4. Publish Event
-    success = await publish_event(normalized_event, base_url=str(request.base_url))
+    http_client = getattr(
+        getattr(request, "app", None), "state", None
+    ) and getattr(request.app.state, "http_client", None)
+
+    success = await publish_event(
+        normalized_event, base_url=str(request.base_url), http_client=http_client
+    )
 
     if success:
         return GatewayResponse(

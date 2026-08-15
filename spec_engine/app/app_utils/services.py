@@ -36,7 +36,7 @@ _AGENT_DIR = os.path.dirname(
 )
 
 
-from agent_engine.app.config import config
+from spec_engine.app.config import config
 
 
 @functools.cache

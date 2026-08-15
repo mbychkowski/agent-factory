@@ -1,4 +1,3 @@
-import json
 import logging
 import uuid
 from typing import Any
@@ -23,7 +22,7 @@ async def execute_agent_turn(request: Request) -> dict[str, Any]:
     """
     try:
         payload: dict[str, Any] = await request.json()
-    except Exception:
+    except Exception:  # noqa: BLE001
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     event_id = payload.get("event_id")
@@ -55,7 +54,7 @@ async def execute_agent_turn(request: Request) -> dict[str, Any]:
         auth_request = google.auth.transport.requests.Request()
         credentials.refresh(auth_request)
         bearer_token = credentials.token
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Failed to refresh GCP credentials: {e}")
         raise HTTPException(status_code=500, detail="Authentication failed")
 
@@ -95,15 +94,24 @@ async def execute_agent_turn(request: Request) -> dict[str, Any]:
         },
     }
 
+    http_client: httpx.AsyncClient | None = getattr(
+        getattr(request, "app", None), "state", None
+    ) and getattr(request.app.state, "http_client", None)
+
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            session_resp = await client.post(
-                query_url, json=create_session_body, headers=headers
+        if http_client is not None:
+            session_resp = await http_client.post(
+                query_url, json=create_session_body, headers=headers, timeout=15.0
             )
-            logger.info(
-                f"Task Worker: Session initialization status {session_resp.status_code}"
-            )
-    except Exception as e:
+        else:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                session_resp = await client.post(
+                    query_url, json=create_session_body, headers=headers
+                )
+        logger.info(
+            f"Task Worker: Session initialization status {session_resp.status_code}"
+        )
+    except Exception as e:  # noqa: BLE001
         logger.warning(f"Task Worker: Session creation check warning: {e}")
 
     from surface_gateway.app.utils.prompts import build_agent_interaction_prompt
@@ -130,31 +138,38 @@ async def execute_agent_turn(request: Request) -> dict[str, Any]:
     )
 
     try:
-        async with httpx.AsyncClient(timeout=600.0) as client:
-            response = await client.post(query_url, json=request_body, headers=headers)
-            if response.status_code not in (200, 201):
-                logger.error(
-                    f"Reasoning Engine returned error status {response.status_code}: {response.text}"
-                )
-                raise HTTPException(
-                    status_code=502, detail=f"Reasoning Engine error: {response.text}"
-                )
-
-            response_text = response.text
-            output_preview = response_text[:1000]
-            logger.info(
-                f"Task Worker: Reasoning Engine output preview ({len(response_text)} bytes):\n{output_preview}"
+        if http_client is not None:
+            response = await http_client.post(
+                query_url, json=request_body, headers=headers, timeout=600.0
             )
-            logger.info(
-                f"Task Worker: Successfully executed turn for event {event_id}."
+        else:
+            async with httpx.AsyncClient(timeout=600.0) as client:
+                response = await client.post(query_url, json=request_body, headers=headers)
+        if response.status_code not in (200, 201):
+            logger.error(
+                f"Reasoning Engine returned error status {response.status_code}: {response.text}"
             )
-            return {
-                "status": "completed",
-                "event_id": event_id,
-                "session_id": thread_ref,
-                "output_preview": output_preview,
-            }
+            raise HTTPException(
+                status_code=502, detail=f"Reasoning Engine error: {response.text}"
+            )
 
-    except Exception as e:
+        response_text = response.text
+        output_preview = response_text[:1000]
+        logger.info(
+            f"Task Worker: Reasoning Engine output preview ({len(response_text)} bytes):\n{output_preview}"
+        )
+        logger.info(
+            f"Task Worker: Successfully executed turn for event {event_id}."
+        )
+        return {
+            "status": "completed",
+            "event_id": event_id,
+            "session_id": thread_ref,
+            "output_preview": output_preview,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Task Worker: Failed during Reasoning Engine execution: {e}")
         raise HTTPException(status_code=500, detail=str(e))

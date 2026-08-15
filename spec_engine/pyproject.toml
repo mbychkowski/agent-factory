@@ -44,24 +44,7 @@ line-length = 88
 target-version = "py312"
 
 [tool.ruff.lint]
-ignore = ["E501", "C901", "B006", "BLE001", "S110", "ASYNC230", "PLW1510", "F401"]
-
-[tool.ty.environment]
-python-version = "3.12"
-
-[tool.ty.src]
-exclude = [".venv/**"]
-
-[tool.ty.rules]
-unresolved-import = "ignore"
-unresolved-attribute = "ignore"
-invalid-argument-type = "ignore"
-invalid-assignment = "ignore"
-invalid-return-type = "ignore"
-invalid-parameter-default = "ignore"
-possibly-missing-attribute = "ignore"
-not-subscriptable = "ignore"
-deprecated = "ignore"
+ignore = ["E501", "C901"]
 
 
 

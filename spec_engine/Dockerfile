@@ -1,30 +1,33 @@
-# Copyright 2026 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Multi-stage build for minimal image size and fast layer caching
+FROM python:3.12-slim AS builder
 
-FROM python:3.12-slim
+WORKDIR /build
 
+# 1. Install modern package manager
 RUN pip install --no-cache-dir uv==0.8.13
 
-WORKDIR /code/agent_engine
+# 2. Cache dependency installation layer
+COPY pyproject.toml README.md ./
+RUN uv pip compile pyproject.toml -o requirements.txt && \
+    uv pip install --no-cache --target=/install -r requirements.txt
 
-# Copy package requirements and source code from current directory
-COPY . /code/agent_engine
+# --- Final Production Image ---
+FROM python:3.12-slim AS runner
 
-# Install package dependencies into system python environment
-RUN uv pip install --system -e /code/agent_engine
+# Create non-root user for security compliance
+RUN groupadd -g 1001 appgroup && \
+    useradd -u 1001 -g appgroup -s /bin/bash -m appuser
 
-ENV PYTHONPATH=/code
+WORKDIR /app
+
+# Copy dependencies and application source
+COPY --from=builder /install /usr/local/lib/python3.12/site-packages/
+COPY . /app/spec_engine
+
+# Environment configuration
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    PORT=8080
 
 ARG COMMIT_SHA=""
 ENV COMMIT_SHA=${COMMIT_SHA}
@@ -32,6 +35,8 @@ ENV COMMIT_SHA=${COMMIT_SHA}
 ARG AGENT_VERSION=0.0.0
 ENV AGENT_VERSION=${AGENT_VERSION}
 
+USER appuser
+
 EXPOSE 8080
 
-CMD ["uvicorn", "agent_engine.app.fast_api_app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "spec_engine.app.fast_api_app:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips=*"]

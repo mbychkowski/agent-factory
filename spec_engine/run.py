@@ -3,7 +3,6 @@ import asyncio
 import os
 import sys
 
-from dotenv import load_dotenv
 from google.adk import Runner
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai import types
@@ -17,8 +16,11 @@ async def run_workflow(input_path: str, output_path: str):
         print(f"Error: Input file '{input_path}' not found.", file=sys.stderr)
         sys.exit(1)
 
-    with open(input_path, "r", encoding="utf-8") as f:
-        raw_requirements = f.read()
+    def _read_file() -> str:
+        with open(input_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    raw_requirements = await asyncio.to_thread(_read_file)
 
     print(
         f"Loaded raw requirements from '{input_path}' ({len(raw_requirements)} bytes)"
@@ -68,7 +70,7 @@ async def run_workflow(input_path: str, output_path: str):
             if event.error_message:
                 print(f"\n[Error Event] {event.error_message}", file=sys.stderr)
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"\nExecution failed: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -103,8 +105,11 @@ async def run_workflow(input_path: str, output_path: str):
     if parent_dir:
         os.makedirs(parent_dir, exist_ok=True)
 
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(compiled_spec)
+    def _write_file():
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(compiled_spec)
+
+    await asyncio.to_thread(_write_file)
 
     print(f"\nSuccessfully compiled and wrote final specification to '{output_path}'")
 

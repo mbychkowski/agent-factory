@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Any
 
 from surface_gateway.app.config import config
 from surface_gateway.app.schemas.events import HumanInteractionEvent
@@ -8,7 +9,9 @@ logger = logging.getLogger(__name__)
 
 
 async def publish_event(
-    event: HumanInteractionEvent, base_url: str | None = None
+    event: HumanInteractionEvent,
+    base_url: str | None = None,
+    http_client: Any | None = None,
 ) -> bool:
     """
     Publishes the normalized HumanInteractionEvent to Cloud Tasks queue in production,
@@ -67,7 +70,7 @@ async def publish_event(
                 created_task = client.create_task(
                     request={"parent": parent, "task": task_with_name}
                 )
-            except Exception as name_err:
+            except Exception as name_err:  # noqa: BLE001
                 if "ALREADY_EXISTS" in str(name_err) or "409" in str(name_err):
                     logger.info(
                         f"Task already enqueued for event {event.event_id} (deduplicated)."
@@ -85,7 +88,7 @@ async def publish_event(
             )
             return True
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if "ALREADY_EXISTS" in str(e) or "409" in str(e):
                 logger.info(
                     f"Task already enqueued for event {event.event_id} (deduplicated)."
@@ -98,23 +101,25 @@ async def publish_event(
     try:
         import httpx
 
-        async with httpx.AsyncClient() as client:
-            url = f"{config.agent_api_url}/a2a/agile_github_planning_app"
-            response = await client.post(
-                url,
-                json={
-                    "jsonrpc": "2.0",
-                    "method": "process_event",
-                    "params": payload_dict,
-                    "id": event.event_id,
-                },
-                timeout=10.0,
-            )
-            logger.info(
-                f"Local Direct Mode: Forwarded event {event.event_id} to {url} (status: {response.status_code})"
-            )
-            return response.status_code in (200, 201, 202)
-    except Exception as e:
+        url = f"{config.agent_api_url}/a2a/agile_github_planning_app"
+        json_payload = {
+            "jsonrpc": "2.0",
+            "method": "process_event",
+            "params": payload_dict,
+            "id": event.event_id,
+        }
+
+        if http_client is not None:
+            response = await http_client.post(url, json=json_payload, timeout=10.0)
+        else:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=json_payload, timeout=10.0)
+
+        logger.info(
+            f"Local Direct Mode: Forwarded event {event.event_id} to {url} (status: {response.status_code})"
+        )
+        return response.status_code in (200, 201, 202)
+    except Exception as e:  # noqa: BLE001
         logger.warning(
             f"Local Direct Mode: Agent API not reachable at {config.agent_api_url} ({e}). Event queued/logged."
         )

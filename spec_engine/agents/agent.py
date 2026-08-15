@@ -203,7 +203,7 @@ async def gate_publish_spec(node_input: Any, ctx: Context) -> Event:
         print(
             f"[DRA Gate] Automatically updated main GitHub Issue #{parent_id} description with certified Specification."
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"[DRA Gate Warning] Could not auto-update issue #{parent_id}: {e}")
 
     return Event(output=f"Specification Issue #{parent_id} refined.")

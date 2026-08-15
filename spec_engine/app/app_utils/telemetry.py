@@ -18,7 +18,7 @@ import os
 logger = logging.getLogger(__name__)
 
 
-from agent_engine.app.config import config
+from spec_engine.app.config import config
 
 
 def setup_telemetry() -> str | None:

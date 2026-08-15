@@ -26,8 +26,8 @@ import inspect
 import json
 import logging
 
-from agent_engine.app.app_utils import services
 from fastapi import FastAPI, HTTPException, Request, encoders, responses
+from spec_engine.app.app_utils import services
 from vertexai.agent_engines.templates.adk import AdkApp
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ def attach_reasoning_engine_routes(app: FastAPI) -> None:
     def get_runtime() -> AdkApp:
         nonlocal runtime, streaming_methods, sync_methods
         if runtime is None:
-            from agent_engine.app.agent import app as adk_app
+            from spec_engine.app.agent import app as adk_app
 
             # Reuse the process-wide services so sessions created here are
             # visible to the adk_api and A2A paths, and vice versa (see services.py).

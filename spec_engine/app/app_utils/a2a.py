@@ -22,7 +22,6 @@ registration.
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING
 
 from a2a.server.apps import A2AFastAPIApplication
@@ -49,7 +48,7 @@ _ADK_AGENT_EXECUTOR_EXTENSION_URI = (
 )
 
 
-from agent_engine.app.config import config
+from spec_engine.app.config import config
 
 
 def _default_capabilities() -> AgentCapabilities:
